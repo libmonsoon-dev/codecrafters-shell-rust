@@ -10,6 +10,7 @@ struct Shell {
     input: io::Stdin,
     output: io::Stdout,
     input_buffer: String,
+    command: Vec<String>,
 }
 
 impl Shell {
@@ -18,29 +19,37 @@ impl Shell {
             input: io::stdin(),
             output: io::stdout(),
             input_buffer: String::new(),
+            command: Vec::new(),
         }
     }
 
     fn read(&mut self) -> io::Result<()> {
         self.output.write_fmt(format_args!("$ "))?;
         self.output.flush()?;
+
+        self.input_buffer.clear();
+        self.input.read_line(&mut self.input_buffer)?;
+
+        self.command = self
+            .input_buffer
+            .split_whitespace()
+            .map(|str| str.trim().to_owned())
+            .collect();
+
         Ok(())
     }
 
     fn eval(&mut self) -> io::Result<()> {
-        self.input_buffer.clear();
-        self.input.read_line(&mut self.input_buffer)?;
-
-        let command = self.input_buffer.split_whitespace().collect::<Vec<_>>();
-
-        match command[0].trim() {
+        match self.command[0].trim() {
             "exit" => exit(0),
             "echo" => self
                 .output
-                .write_fmt(format_args!("{}\n", command[1..].join(" ")))?,
-            &_ => self
-                .output
-                .write_fmt(format_args!("{}: command not found\n", command[0].trim()))?,
+                .write_fmt(format_args!("{}\n", self.command[1..].join(" ")))?,
+            "type" => self.type_builtin()?,
+            _ => self.output.write_fmt(format_args!(
+                "{}: command not found\n",
+                self.command[0].trim()
+            ))?,
         }
 
         Ok(())
@@ -56,5 +65,20 @@ impl Shell {
             self.eval().unwrap();
             self.print().unwrap();
         }
+    }
+
+    fn type_builtin(&mut self) -> io::Result<()> {
+        for arg in &self.command[1..] {
+            match arg.as_str() {
+                "exit" | "echo" | "type" => self
+                    .output
+                    .write_fmt(format_args!("{} is a shell builtin\n", arg))?,
+                _ => self
+                    .output
+                    .write_fmt(format_args!("{}: not found\n", arg))?,
+            }
+        }
+
+        Ok(())
     }
 }

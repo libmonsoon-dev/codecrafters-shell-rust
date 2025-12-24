@@ -9,7 +9,7 @@ fn main() {
 struct Shell {
     input: io::Stdin,
     output: io::Stdout,
-    command: String,
+    input_buffer: String,
 }
 
 impl Shell {
@@ -17,7 +17,7 @@ impl Shell {
         Shell {
             input: io::stdin(),
             output: io::stdout(),
-            command: String::new(),
+            input_buffer: String::new(),
         }
     }
 
@@ -28,11 +28,16 @@ impl Shell {
     }
 
     fn eval(&mut self) -> io::Result<()> {
-        self.command.clear();
-        self.input.read_line(&mut self.command)?;
+        self.input_buffer.clear();
+        self.input.read_line(&mut self.input_buffer)?;
 
-        match self.command.trim() {
+        let command = self.input_buffer.split_whitespace().collect::<Vec<_>>();
+
+        match command[0].trim() {
             "exit" => exit(0),
+            "echo" => self
+                .output
+                .write_fmt(format_args!("{}", command[1..].join(" ")))?,
             &_ => {}
         }
 
@@ -40,8 +45,10 @@ impl Shell {
     }
 
     fn print(&mut self) -> io::Result<()> {
-        self.output
-            .write_fmt(format_args!("{}: command not found\n", self.command.trim()))?;
+        self.output.write_fmt(format_args!(
+            "{}: command not found\n",
+            self.input_buffer.trim()
+        ))?;
         Ok(())
     }
 

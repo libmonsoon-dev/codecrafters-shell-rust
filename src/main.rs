@@ -71,8 +71,8 @@ impl Shell {
             return Ok(());
         }
 
-        if let Some(path) = self.lookup_path(self.command[0].clone())? {
-            let mut cmd = Command::new(path);
+        if let Some(_) = self.lookup_path(self.command[0].clone())? {
+            let mut cmd = Command::new(self.command[0].clone());
 
             self.command[1..].iter().for_each(|arg| {
                 cmd.arg(arg);

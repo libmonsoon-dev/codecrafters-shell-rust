@@ -38,17 +38,15 @@ impl Shell {
             "echo" => self
                 .output
                 .write_fmt(format_args!("{}\n", command[1..].join(" ")))?,
-            &_ => {}
+            &_ => self
+                .output
+                .write_fmt(format_args!("{}: command not found\n", command[0].trim()))?,
         }
 
         Ok(())
     }
 
     fn print(&mut self) -> io::Result<()> {
-        self.output.write_fmt(format_args!(
-            "{}: command not found\n",
-            self.input_buffer.trim()
-        ))?;
         Ok(())
     }
 

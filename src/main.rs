@@ -16,7 +16,7 @@ macro_rules! print {
     }};
 }
 
-static BUILTIN_COMMANDS: &[&str] = &["exit", "echo", "type", "pwd"];
+static BUILTIN_COMMANDS: &[&str] = &["exit", "echo", "type", "pwd", "cd"];
 
 fn main() {
     let mut shell = Shell::new();
@@ -67,7 +67,8 @@ impl Shell {
                 "echo" => print!(self, "{}\n", self.command[1..].join(" ")),
                 "type" => self.type_builtin()?,
                 "pwd" => print!(self, "{}\n", env::current_dir()?.display()),
-                _ => unreachable!(),
+                "cd" => self.cd_builtin()?,
+                _ => unimplemented!("builtin command {}", self.command[0]),
             }
 
             return Ok(());
@@ -151,5 +152,22 @@ impl Shell {
                 .map(String::from)
                 .collect();
         })
+    }
+
+    fn cd_builtin(&mut self) -> io::Result<()> {
+        let path = if self.command.len() == 1 {
+            env::var("HOME").unwrap()
+        } else {
+            self.command[1].clone()
+        };
+        let attr = fs::metadata(path.clone());
+        if matches!(attr, Err(ref err) if err.kind() == io::ErrorKind::NotFound) {
+            print!(self, "cd: {path}: No such file or directory\n");
+            return Ok(());
+        }
+
+        env::set_current_dir(path)?;
+
+        Ok(())
     }
 }

@@ -5,6 +5,15 @@ use std::path::{Path, PathBuf};
 use std::process::exit;
 use std::sync::Once;
 
+macro_rules! print {
+    ($self:expr, $fmt:expr) => {{
+        $self.output.write_fmt(format_args!($fmt))?;
+    }};
+    ($self:expr, $fmt:expr, $($args:tt)*) => {{
+        $self.output.write_fmt(format_args!($fmt, $($args)*))?;
+    }};
+}
+
 fn main() {
     let mut shell = Shell::new();
     shell.repl();
@@ -32,7 +41,7 @@ impl Shell {
     }
 
     fn read(&mut self) -> io::Result<()> {
-        self.output.write_fmt(format_args!("$ "))?;
+        print!(self, "$ ");
         self.output.flush()?;
 
         self.input_buffer.clear();
@@ -50,14 +59,9 @@ impl Shell {
     fn eval(&mut self) -> io::Result<()> {
         match self.command[0].trim() {
             "exit" => exit(0),
-            "echo" => self
-                .output
-                .write_fmt(format_args!("{}\n", self.command[1..].join(" ")))?,
+            "echo" => print!(self, "{}\n", self.command[1..].join(" ")),
             "type" => self.type_builtin()?,
-            _ => self.output.write_fmt(format_args!(
-                "{}: command not found\n",
-                self.command[0].trim()
-            ))?,
+            _ => print!(self, "{}: command not found\n", self.command[0].trim()),
         }
 
         Ok(())
@@ -80,19 +84,16 @@ impl Shell {
             .iter()
             .try_for_each(|arg| -> io::Result<()> {
                 if vec!["exit", "echo", "type"].contains(&arg.as_str()) {
-                    self.output
-                        .write_fmt(format_args!("{} is a shell builtin\n", arg))?;
+                    print!(self, "{} is a shell builtin\n", arg);
                     return Ok(());
                 }
 
                 if let Some(path) = self.lookup_path(arg.clone())? {
-                    self.output
-                        .write_fmt(format_args!("{} is {}\n", arg, path.display()))?;
+                    print!(self, "{} is {}\n", arg, path.display());
                     return Ok(());
                 }
 
-                self.output
-                    .write_fmt(format_args!("{}: not found\n", arg))?;
+                print!(self, "{}: not found\n", arg);
 
                 Ok(())
             })?;

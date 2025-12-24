@@ -1,4 +1,5 @@
 use std::io::{self, Write};
+use std::process::exit;
 
 fn main() {
     let mut shell = Shell::new();
@@ -27,14 +28,20 @@ impl Shell {
     }
 
     fn eval(&mut self) -> io::Result<()> {
+        self.command.clear();
         self.input.read_line(&mut self.command)?;
+
+        match self.command.trim() {
+            "exit" => exit(0),
+            &_ => {}
+        }
+
         Ok(())
     }
 
     fn print(&mut self) -> io::Result<()> {
         self.output
             .write_fmt(format_args!("{}: command not found\n", self.command.trim()))?;
-        self.command.clear();
         Ok(())
     }
 

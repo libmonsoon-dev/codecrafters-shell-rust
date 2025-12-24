@@ -37,7 +37,7 @@ impl Shell {
             "exit" => exit(0),
             "echo" => self
                 .output
-                .write_fmt(format_args!("{}", command[1..].join(" ")))?,
+                .write_fmt(format_args!("{}\n", command[1..].join(" ")))?,
             &_ => {}
         }
 

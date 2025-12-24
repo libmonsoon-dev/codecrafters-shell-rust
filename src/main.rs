@@ -34,6 +34,7 @@ impl Shell {
     fn print(&mut self) -> io::Result<()> {
         self.output
             .write_fmt(format_args!("{}: command not found\n", self.command.trim()))?;
+        self.command.clear();
         Ok(())
     }
 

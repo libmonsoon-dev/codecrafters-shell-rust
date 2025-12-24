@@ -3,6 +3,7 @@ use std::io::{self, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process::exit;
+use std::process::Command;
 use std::sync::Once;
 
 macro_rules! print {
@@ -13,6 +14,8 @@ macro_rules! print {
         $self.output.write_fmt(format_args!($fmt, $($args)*))?;
     }};
 }
+
+static BUILTIN_COMMANDS: &[&str] = &["exit", "echo", "type"];
 
 fn main() {
     let mut shell = Shell::new();
@@ -57,13 +60,31 @@ impl Shell {
     }
 
     fn eval(&mut self) -> io::Result<()> {
-        match self.command[0].trim() {
-            "exit" => exit(0),
-            "echo" => print!(self, "{}\n", self.command[1..].join(" ")),
-            "type" => self.type_builtin()?,
-            _ => print!(self, "{}: command not found\n", self.command[0].trim()),
+        if BUILTIN_COMMANDS.contains(&self.command[0].as_ref()) {
+            match self.command[0].as_ref() {
+                "exit" => exit(0),
+                "echo" => print!(self, "{}\n", self.command[1..].join(" ")),
+                "type" => self.type_builtin()?,
+                _ => unreachable!(),
+            }
+
+            return Ok(());
         }
 
+        if let Some(path) = self.lookup_path(self.command[0].clone())? {
+            let mut cmd = Command::new(path);
+
+            self.command[1..].iter().for_each(|arg| {
+                cmd.arg(arg);
+            });
+
+            // TODO: redirect stdout to self.output
+            cmd.spawn()?.wait()?;
+
+            return Ok(());
+        }
+
+        print!(self, "{}: command not found\n", self.command[0].trim());
         Ok(())
     }
 
@@ -83,7 +104,7 @@ impl Shell {
         let _ = &self.command.clone()[1..]
             .iter()
             .try_for_each(|arg| -> io::Result<()> {
-                if vec!["exit", "echo", "type"].contains(&arg.as_str()) {
+                if BUILTIN_COMMANDS.contains(&arg.as_str()) {
                     print!(self, "{} is a shell builtin\n", arg);
                     return Ok(());
                 }

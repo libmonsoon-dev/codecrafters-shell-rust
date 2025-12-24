@@ -155,7 +155,7 @@ impl Shell {
     }
 
     fn cd_builtin(&mut self) -> io::Result<()> {
-        let path = if self.command.len() == 1 {
+        let path = if self.command.len() == 1 || self.command[1] == "~" {
             env::var("HOME").unwrap()
         } else {
             self.command[1].clone()

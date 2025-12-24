@@ -1,3 +1,4 @@
+use std::env;
 use std::fs;
 use std::io::{self, Write};
 use std::os::unix::fs::PermissionsExt;
@@ -15,7 +16,7 @@ macro_rules! print {
     }};
 }
 
-static BUILTIN_COMMANDS: &[&str] = &["exit", "echo", "type"];
+static BUILTIN_COMMANDS: &[&str] = &["exit", "echo", "type", "pwd"];
 
 fn main() {
     let mut shell = Shell::new();
@@ -65,6 +66,7 @@ impl Shell {
                 "exit" => exit(0),
                 "echo" => print!(self, "{}\n", self.command[1..].join(" ")),
                 "type" => self.type_builtin()?,
+                "pwd" => print!(self, "{}\n", env::current_dir()?.display()),
                 _ => unreachable!(),
             }
 
@@ -143,7 +145,7 @@ impl Shell {
 
     fn load_path(&mut self) {
         self.env_once.call_once(|| {
-            self.path = std::env::var("PATH")
+            self.path = env::var("PATH")
                 .unwrap()
                 .split(':')
                 .map(String::from)

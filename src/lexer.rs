@@ -23,7 +23,7 @@ impl Lexer {
     fn next_token(&mut self) -> Token {
         let token = match self.input[self.position] {
             '\'' => self.handle_single_quote(),
-            char if char::is_alphanumeric(char) => self.handle_string(),
+            char if is_string_char(char) => self.handle_string(),
             char if char::is_whitespace(char) => self.handle_whitespace(),
             char @ _ => unimplemented!("handling of {:?}", char),
         };
@@ -47,7 +47,7 @@ impl Lexer {
 
     fn handle_string(&mut self) -> Token {
         let mut end_position = self.position;
-        while end_position < self.input.len() && char::is_alphanumeric(self.input[end_position]) {
+        while end_position < self.input.len() && is_string_char(self.input[end_position]) {
             end_position += 1;
         }
         let lexeme: String = self.input[self.position..end_position].iter().collect();
@@ -72,6 +72,10 @@ impl Lexer {
             lexeme,
         }
     }
+}
+
+fn is_string_char(char: char) -> bool {
+    char == '/' || char::is_alphanumeric(char)
 }
 
 #[derive(PartialEq, Debug)]

@@ -173,4 +173,40 @@ mod tests {
         let args = parser.parse();
         assert_eq!(args, vec![String::from("shell's test")]);
     }
+
+    #[test]
+    fn each_backslash_creates_a_literal_space_as_part_of_one_argument() {
+        let mut parser = Parser::new(String::from(r#"three\ \ \ spaces"#));
+        let args = parser.parse();
+        assert_eq!(args, vec![String::from("three   spaces")]);
+    }
+
+    #[test]
+    fn the_backslash_preserves_the_first_space_literally_but_the_shell_collapses_the_subsequent_unescaped_spaces()
+     {
+        let mut parser = Parser::new(String::from(r#"before\     after"#));
+        let args = parser.parse();
+        assert_eq!(args, vec![String::from("before "), String::from("after")]);
+    }
+
+    #[test]
+    fn backslash_n_becomes_just_n() {
+        let mut parser = Parser::new(String::from(r#"test\nexample"#));
+        let args = parser.parse();
+        assert_eq!(args, vec![String::from("testnexample")]);
+    }
+
+    #[test]
+    fn the_first_backslash_escapes_the_second() {
+        let mut parser = Parser::new(String::from(r#"hello\\world"#));
+        let args = parser.parse();
+        assert_eq!(args, vec![String::from(r#"hello\world"#)]);
+    }
+
+    #[test]
+    fn backslash_quote_makes_the_quote_literal_character() {
+        let mut parser = Parser::new(String::from(r#"\'hello\'"#));
+        let args = parser.parse();
+        assert_eq!(args, vec![String::from("'hello'")]);
+    }
 }

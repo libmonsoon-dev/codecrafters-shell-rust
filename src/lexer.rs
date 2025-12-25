@@ -21,15 +21,14 @@ impl Lexer {
     }
 
     fn next_token(&mut self) -> Token {
-        let token = match self.input[self.position] {
+        match self.input[self.position] {
             '\'' => self.handle_single_quote(),
             '"' => self.handle_double_quote(),
+            '\\' => self.handle_backslash(),
             char if char::is_whitespace(char) => self.handle_whitespace(),
             char if is_string_char(char) => self.handle_string(),
             char => unimplemented!("handling of {:?}", char),
-        };
-
-        token
+        }
     }
 
     fn is_eof(&self) -> bool {
@@ -80,6 +79,16 @@ impl Lexer {
 
         Token {
             kind: TokenKind::Whitespace,
+            lexeme,
+        }
+    }
+
+    fn handle_backslash(&mut self) -> Token {
+        let lexeme = String::from(self.input[self.position + 1]);
+        self.position += 2;
+
+        Token {
+            kind: TokenKind::String,
             lexeme,
         }
     }

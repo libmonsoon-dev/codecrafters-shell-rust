@@ -36,10 +36,11 @@ impl Parser {
     fn next_argument(&mut self) -> Option<String> {
         match self.current_token() {
             token if token.kind == TokenKind::SingleQuote => self.handle_single_quote(),
+            token if token.kind == TokenKind::DoubleQuote => self.handle_double_quote(),
             token if token.kind == TokenKind::String => self.handle_string(),
             token if token.kind == TokenKind::Whitespace => self.handle_whitespace(),
             token if token.kind == TokenKind::EOF => self.handle_eof(),
-            token @ _ => unimplemented!("{token:?} handling"),
+            token => unimplemented!("{token:?} handling"),
         }
     }
 
@@ -50,8 +51,21 @@ impl Parser {
     fn handle_single_quote(&mut self) -> Option<String> {
         if !self.quotes.is_empty() && self.quotes.last().unwrap() == &TokenKind::SingleQuote {
             self.quotes.pop();
-        } else {
+        } else if self.quotes.is_empty() {
             self.quotes.push(TokenKind::SingleQuote);
+        } else {
+            self.argument_buffer.push('\'')
+        }
+        self.position += 1;
+
+        None
+    }
+
+    fn handle_double_quote(&mut self) -> Option<String> {
+        if !self.quotes.is_empty() && self.quotes.last().unwrap() == &TokenKind::DoubleQuote {
+            self.quotes.pop();
+        } else {
+            self.quotes.push(TokenKind::DoubleQuote);
         }
         self.position += 1;
 
@@ -130,5 +144,33 @@ mod tests {
         let mut parser = Parser::new(String::from(r#"hello''world"#));
         let args = parser.parse();
         assert_eq!(args, vec![String::from("helloworld")]);
+    }
+
+    #[test]
+    fn multiple_spaces_preserved() {
+        let mut parser = Parser::new(String::from(r#""hello    world""#));
+        let args = parser.parse();
+        assert_eq!(args, vec![String::from("hello    world")]);
+    }
+
+    #[test]
+    fn quoted_strings_next_to_each_other_are_concatenated() {
+        let mut parser = Parser::new(String::from(r#""hello""world""#));
+        let args = parser.parse();
+        assert_eq!(args, vec![String::from("helloworld")]);
+    }
+
+    #[test]
+    fn separate_arguments() {
+        let mut parser = Parser::new(String::from(r#""hello" "world""#));
+        let args = parser.parse();
+        assert_eq!(args, vec![String::from("hello"), String::from("world")]);
+    }
+
+    #[test]
+    fn single_quotes_inside_are_literal() {
+        let mut parser = Parser::new(String::from(r#""shell's test""#));
+        let args = parser.parse();
+        assert_eq!(args, vec![String::from("shell's test")]);
     }
 }

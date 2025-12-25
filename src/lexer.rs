@@ -16,16 +16,17 @@ impl Lexer {
         while !self.is_eof() {
             tokens.push(self.next_token());
         }
-        tokens.push(Token::eof(self.position));
+        tokens.push(Token::eof());
         tokens
     }
 
     fn next_token(&mut self) -> Token {
         let token = match self.input[self.position] {
             '\'' => self.handle_single_quote(),
+            '"' => self.handle_double_quote(),
             char if char::is_whitespace(char) => self.handle_whitespace(),
             char if is_string_char(char) => self.handle_string(),
-            char @ _ => unimplemented!("handling of {:?}", char),
+            char => unimplemented!("handling of {:?}", char),
         };
 
         token
@@ -41,6 +42,16 @@ impl Lexer {
 
         Token {
             kind: TokenKind::SingleQuote,
+            lexeme,
+        }
+    }
+
+    fn handle_double_quote(&mut self) -> Token {
+        let lexeme = String::from(self.input[self.position]);
+        self.position += 1;
+
+        Token {
+            kind: TokenKind::DoubleQuote,
             lexeme,
         }
     }
@@ -75,25 +86,20 @@ impl Lexer {
 }
 
 fn is_string_char(char: char) -> bool {
-    !['\'', '"'].contains(&char) && !char::is_whitespace(char)
+    !['\'', '"', '$', '\\'].contains(&char) && !char::is_whitespace(char)
 }
 
 #[derive(PartialEq, Debug)]
 pub struct Token {
     pub kind: TokenKind,
     pub lexeme: String,
-    // pub span: Span,
 }
 
 impl Token {
-    fn eof(_position: usize) -> Self {
+    fn eof() -> Self {
         Self {
             kind: TokenKind::EOF,
             lexeme: String::new(),
-            // span: Span {
-            //     start: position,
-            //     end: position,
-            // },
         }
     }
 }
@@ -101,16 +107,11 @@ impl Token {
 #[derive(PartialEq, Debug)]
 pub enum TokenKind {
     SingleQuote,
+    DoubleQuote,
     String,
     Whitespace,
     EOF,
 }
-
-// #[derive(PartialEq, Debug)]
-// pub struct Span {
-//     pub start: usize,
-//     pub end: usize,
-// }
 
 #[cfg(test)]
 mod tests {
@@ -127,12 +128,10 @@ mod tests {
                 Token {
                     kind: TokenKind::String,
                     lexeme: String::from("hello"),
-                    // span: Span { start: 0, end: 4 },
                 },
                 Token {
                     kind: TokenKind::Whitespace,
                     lexeme: String::from("    "),
-                    // span: Span { start: 0, end: 4 }, //TODO
                 },
                 Token {
                     kind: TokenKind::String,

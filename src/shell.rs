@@ -45,6 +45,10 @@ impl Shell {
     }
 
     fn eval(&mut self) -> io::Result<()> {
+        if self.command.is_empty() {
+            return Ok(());
+        }
+
         if BUILTIN_COMMANDS.contains(&self.command[0].as_ref()) {
             match self.command[0].as_ref() {
                 "exit" => exit(0),

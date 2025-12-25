@@ -75,7 +75,7 @@ impl Lexer {
 }
 
 fn is_string_char(char: char) -> bool {
-    char == '/' || char::is_alphanumeric(char)
+    ['/', '~'].contains(&char) || char::is_alphanumeric(char)
 }
 
 #[derive(PartialEq, Debug)]

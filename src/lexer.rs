@@ -23,8 +23,8 @@ impl Lexer {
     fn next_token(&mut self) -> Token {
         let token = match self.input[self.position] {
             '\'' => self.handle_single_quote(),
-            char if is_string_char(char) => self.handle_string(),
             char if char::is_whitespace(char) => self.handle_whitespace(),
+            char if is_string_char(char) => self.handle_string(),
             char @ _ => unimplemented!("handling of {:?}", char),
         };
 
@@ -75,7 +75,7 @@ impl Lexer {
 }
 
 fn is_string_char(char: char) -> bool {
-    ['/', '~', '.', '-', ':'].contains(&char) || char::is_alphanumeric(char)
+    !['\'', '"'].contains(&char) && !char::is_whitespace(char)
 }
 
 #[derive(PartialEq, Debug)]

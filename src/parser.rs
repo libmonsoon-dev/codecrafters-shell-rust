@@ -1,0 +1,134 @@
+use crate::lexer::{Lexer, Token, TokenKind};
+
+pub struct Parser {
+    input: Vec<Token>,
+    argument_buffer: String,
+    position: usize,
+    quotes: Vec<TokenKind>,
+}
+
+impl Parser {
+    pub fn new(input: String) -> Self {
+        Self {
+            input: Lexer::new(input).lex(),
+            argument_buffer: String::new(),
+            position: 0,
+            quotes: Vec::new(),
+        }
+    }
+
+    pub fn parse(&mut self) -> Vec<String> {
+        let mut output: Vec<String> = Vec::new();
+
+        while !self.is_eof() {
+            if let Some(arg) = self.next_argument() {
+                output.push(arg);
+            }
+        }
+
+        output
+    }
+
+    fn is_eof(&self) -> bool {
+        self.position >= self.input.len()
+    }
+
+    fn next_argument(&mut self) -> Option<String> {
+        match self.current_token() {
+            token if token.kind == TokenKind::SingleQuote => self.handle_single_quote(),
+            token if token.kind == TokenKind::String => self.handle_string(),
+            token if token.kind == TokenKind::Whitespace => self.handle_whitespace(),
+            token if token.kind == TokenKind::EOF => self.handle_eof(),
+            token @ _ => unimplemented!("{token:?} handling"),
+        }
+    }
+
+    fn current_token(&self) -> &Token {
+        &self.input[self.position]
+    }
+
+    fn handle_single_quote(&mut self) -> Option<String> {
+        if !self.quotes.is_empty() && self.quotes.last().unwrap() == &TokenKind::SingleQuote {
+            self.quotes.pop();
+        } else {
+            self.quotes.push(TokenKind::SingleQuote);
+        }
+        self.position += 1;
+
+        None
+    }
+
+    fn handle_string(&mut self) -> Option<String> {
+        self.argument_buffer
+            .push_str(&self.current_token().lexeme.clone());
+        self.position += 1;
+
+        None
+    }
+
+    fn handle_whitespace(&mut self) -> Option<String> {
+        let result = if !self.quotes.is_empty() {
+            self.argument_buffer
+                .push_str(&self.current_token().lexeme.clone());
+
+            None
+        } else {
+            self.flush_buf()
+        };
+
+        self.position += 1;
+        result
+    }
+
+    fn flush_buf(&mut self) -> Option<String> {
+        if self.argument_buffer.is_empty() {
+            return None;
+        }
+
+        let buf = self.argument_buffer.clone();
+        self.argument_buffer.clear();
+
+        Some(buf)
+    }
+
+    fn handle_eof(&mut self) -> Option<String> {
+        let result = self.flush_buf();
+        self.position += 1;
+
+        result
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::Parser;
+    use pretty_assertions::assert_eq;
+
+    #[test]
+    fn consecutive_spaces_are_collapsed_unless_quoted() {
+        let mut parser = Parser::new(String::from(r#"hello    world"#));
+        let args = parser.parse();
+        assert_eq!(args, vec![String::from("hello"), String::from("world")]);
+    }
+
+    #[test]
+    fn spaces_are_preserved_within_quotes() {
+        let mut parser = Parser::new(String::from(r#"'hello    world'"#));
+        let args = parser.parse();
+        assert_eq!(args, vec![String::from("hello    world")]);
+    }
+
+    #[test]
+    fn adjacent_quoted_strings_are_concatenated() {
+        let mut parser = Parser::new(String::from(r#"'hello''world'"#));
+        let args = parser.parse();
+        assert_eq!(args, vec![String::from("helloworld")]);
+    }
+
+    #[test]
+    fn empty_single_quotes_are_ignored() {
+        let mut parser = Parser::new(String::from(r#"hello''world"#));
+        let args = parser.parse();
+        assert_eq!(args, vec![String::from("helloworld")]);
+    }
+}

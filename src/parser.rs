@@ -178,7 +178,7 @@ mod tests {
     fn each_backslash_creates_a_literal_space_as_part_of_one_argument() {
         let mut parser = Parser::new(String::from(r#"three\ \ \ spaces"#));
         let args = parser.parse();
-        assert_eq!(args, vec![String::from("three   spaces")]);
+        assert_eq!(args, vec![String::from(r#"three\ \ \ spaces"#)]);
     }
 
     #[test]
@@ -186,27 +186,27 @@ mod tests {
      {
         let mut parser = Parser::new(String::from(r#"before\     after"#));
         let args = parser.parse();
-        assert_eq!(args, vec![String::from("before "), String::from("after")]);
+        assert_eq!(args, vec![String::from("before\\ "), String::from("after")]);
     }
 
     #[test]
     fn backslash_n_becomes_just_n() {
         let mut parser = Parser::new(String::from(r#"test\nexample"#));
         let args = parser.parse();
-        assert_eq!(args, vec![String::from("testnexample")]);
+        assert_eq!(args, vec![String::from(r#"test\nexample"#)]);
     }
 
     #[test]
     fn the_first_backslash_escapes_the_second() {
         let mut parser = Parser::new(String::from(r#"hello\\world"#));
         let args = parser.parse();
-        assert_eq!(args, vec![String::from(r#"hello\world"#)]);
+        assert_eq!(args, vec![String::from(r#"hello\\world"#)]);
     }
 
     #[test]
     fn backslash_quote_makes_the_quote_literal_character() {
         let mut parser = Parser::new(String::from(r#"\'hello\'"#));
         let args = parser.parse();
-        assert_eq!(args, vec![String::from("'hello'")]);
+        assert_eq!(args, vec![String::from(r#"\'hello\'"#)]);
     }
 }

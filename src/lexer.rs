@@ -84,7 +84,9 @@ impl Lexer {
     }
 
     fn handle_backslash(&mut self) -> Token {
-        let lexeme = String::from(self.input[self.position + 1]);
+        let lexeme: String = self.input[self.position..self.position + 2]
+            .iter()
+            .collect();
         self.position += 2;
 
         Token {

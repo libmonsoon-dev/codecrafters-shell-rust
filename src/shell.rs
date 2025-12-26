@@ -1,3 +1,4 @@
+use crate::escape_sequence_interpreter::Interpreter;
 use crate::parser::Parser;
 use crate::print;
 use std::env;
@@ -52,7 +53,7 @@ impl Shell {
         if BUILTIN_COMMANDS.contains(&self.command[0].as_ref()) {
             match self.command[0].as_ref() {
                 "exit" => exit(0),
-                "echo" => print!(self, "{}\n", self.command[1..].join(" ")),
+                "echo" => self.echo_builtin()?,
                 "type" => self.type_builtin()?,
                 "pwd" => print!(self, "{}\n", env::current_dir()?.display()),
                 "cd" => self.cd_builtin()?,
@@ -155,6 +156,20 @@ impl Shell {
         }
 
         env::set_current_dir(path)?;
+
+        Ok(())
+    }
+
+    fn echo_builtin(&mut self) -> io::Result<()> {
+        print!(
+            self,
+            "{}\n",
+            self.command[1..]
+                .iter()
+                .map(|arg| { Interpreter::new(arg.clone()).interpret() })
+                .collect::<Vec<String>>()
+                .join(" ")
+        );
 
         Ok(())
     }

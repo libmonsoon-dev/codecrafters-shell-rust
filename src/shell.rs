@@ -166,7 +166,7 @@ impl Shell {
             "{}\n",
             self.command[1..]
                 .iter()
-                .map(|arg| { Interpreter::new(arg.clone()).interpret() })
+                .map(|arg| { Interpreter::new(arg).interpret() })
                 .collect::<Vec<String>>()
                 .join(" ")
         );

@@ -34,9 +34,6 @@ impl Shell {
     }
 
     fn read(&mut self) -> io::Result<()> {
-        print!(self, "$ ");
-        self.output.flush()?;
-
         self.input_buffer.clear();
         self.input.read_line(&mut self.input_buffer)?;
 
@@ -71,7 +68,10 @@ impl Shell {
             });
 
             // TODO: redirect stdout to self.output
-            cmd.spawn()?.wait()?;
+            let mut child = cmd.spawn()?;
+            // let mut stdout = child.stdout.take().expect("handle present");
+            // io::copy(&mut stdout, &mut self.output)?;
+            child.wait()?;
 
             return Ok(());
         }
@@ -81,10 +81,15 @@ impl Shell {
     }
 
     fn print(&mut self) -> io::Result<()> {
+        print!(self, "$ ");
+        self.output.flush()?;
+
         Ok(())
     }
 
     pub fn repl(&mut self) {
+        self.print().unwrap();
+
         loop {
             self.read().unwrap();
             self.eval().unwrap();

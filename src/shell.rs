@@ -1,4 +1,3 @@
-use crate::escape_sequence_interpreter::Interpreter;
 use crate::parser::Parser;
 use crate::print;
 use std::env;
@@ -166,15 +165,7 @@ impl Shell {
     }
 
     fn echo_builtin(&mut self) -> io::Result<()> {
-        print!(
-            self,
-            "{}\n",
-            self.command[1..]
-                .iter()
-                .map(|arg| { Interpreter::new(arg).interpret() })
-                .collect::<Vec<String>>()
-                .join(" ")
-        );
+        print!(self, "{}\n", self.command[1..].join(" "));
 
         Ok(())
     }

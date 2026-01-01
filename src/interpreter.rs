@@ -57,6 +57,15 @@ impl<'a> Interpreter<'a> {
         if self.quotes.is_empty() {
             let c = self.chars.next().unwrap();
             self.handle_char(c)
+        } else if self.quotes.last() == Some(&TokenKind::DoubleQuote) {
+            let c = self.chars.next().unwrap();
+            static DOUBLE_QUOTE_ESCAPABLE: &[char] = &['"', '\\', '$', '`', '\n'];
+            if DOUBLE_QUOTE_ESCAPABLE.contains(&c) {
+                self.handle_char(c)
+            } else {
+                self.handle_char('\\');
+                self.handle_char(c)
+            }
         } else {
             self.handle_char('\\')
         }

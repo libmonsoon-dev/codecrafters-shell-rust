@@ -302,4 +302,14 @@ mod tests {
             vec![String::from("echo"), String::from(r#"example\"test"#)]
         );
     }
+
+    #[test]
+    fn echo_backslashes_in_double_quotes() {
+        let mut parser = Parser::new(String::from(r#"echo "hello'test'\\'script""#));
+        let args = parser.parse();
+        assert_eq!(
+            args,
+            vec![String::from("echo"), String::from(r#"hello'test'\'script"#)]
+        );
+    }
 }

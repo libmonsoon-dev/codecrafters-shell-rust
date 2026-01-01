@@ -1,4 +1,4 @@
-use crate::escape_sequence_interpreter::Interpreter;
+use crate::interpreter::Interpreter;
 use crate::lexer::{Lexer, Token, TokenKind};
 
 pub struct Parser {

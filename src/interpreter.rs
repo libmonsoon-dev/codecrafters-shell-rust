@@ -3,7 +3,6 @@ use std::mem;
 use std::str::Chars;
 
 pub struct Interpreter<'a> {
-    input: &'a str,
     chars: Chars<'a>,
     quotes: &'a mut Vec<TokenKind>,
     output: String,
@@ -12,7 +11,6 @@ pub struct Interpreter<'a> {
 impl<'a> Interpreter<'a> {
     pub fn new(input: &'a str, quotes: &'a mut Vec<TokenKind>) -> Self {
         Self {
-            input,
             chars: input.chars(),
             quotes,
             output: String::with_capacity(input.len()),

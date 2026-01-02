@@ -12,3 +12,4 @@ thiserror = "1.0.38"                             # error handling
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"
+rstest = "0.20.0"

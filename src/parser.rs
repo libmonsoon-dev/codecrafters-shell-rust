@@ -138,178 +138,40 @@ impl Parser {
 mod tests {
     use super::Parser;
     use pretty_assertions::assert_eq;
+    use rstest::rstest;
 
-    #[test]
-    fn consecutive_spaces_are_collapsed_unless_quoted() {
-        let mut parser = Parser::new(String::from(r#"hello    world"#));
-        let args = parser.parse();
-        assert_eq!(args, vec![String::from("hello"), String::from("world")]);
-    }
-
-    #[test]
-    fn spaces_are_preserved_within_quotes() {
-        let mut parser = Parser::new(String::from(r#"'hello    world'"#));
-        let args = parser.parse();
-        assert_eq!(args, vec![String::from("hello    world")]);
-    }
-
-    #[test]
-    fn adjacent_quoted_strings_are_concatenated() {
-        let mut parser = Parser::new(String::from(r#"'hello''world'"#));
-        let args = parser.parse();
-        assert_eq!(args, vec![String::from("helloworld")]);
-    }
-
-    #[test]
-    fn empty_single_quotes_are_ignored() {
-        let mut parser = Parser::new(String::from(r#"hello''world"#));
-        let args = parser.parse();
-        assert_eq!(args, vec![String::from("helloworld")]);
-    }
-
-    #[test]
-    fn multiple_spaces_preserved() {
-        let mut parser = Parser::new(String::from(r#""hello    world""#));
-        let args = parser.parse();
-        assert_eq!(args, vec![String::from("hello    world")]);
-    }
-
-    #[test]
-    fn quoted_strings_next_to_each_other_are_concatenated() {
-        let mut parser = Parser::new(String::from(r#""hello""world""#));
-        let args = parser.parse();
-        assert_eq!(args, vec![String::from("helloworld")]);
-    }
-
-    #[test]
-    fn separate_arguments() {
-        let mut parser = Parser::new(String::from(r#""hello" "world""#));
-        let args = parser.parse();
-        assert_eq!(args, vec![String::from("hello"), String::from("world")]);
-    }
-
-    #[test]
-    fn single_quotes_inside_are_literal() {
-        let mut parser = Parser::new(String::from(r#""shell's test""#));
-        let args = parser.parse();
-        assert_eq!(args, vec![String::from("shell's test")]);
-    }
-
-    #[test]
-    fn each_backslash_creates_a_literal_space_as_part_of_one_argument() {
-        let mut parser = Parser::new(String::from(r#"three\ \ \ spaces"#));
-        let args = parser.parse();
-        assert_eq!(args, vec![String::from(r#"three\ \ \ spaces"#)]);
-    }
-
-    #[test]
-    fn the_backslash_preserves_the_first_space_literally_but_the_shell_collapses_the_subsequent_unescaped_spaces()
-     {
-        let mut parser = Parser::new(String::from(r#"before\     after"#));
-        let args = parser.parse();
-        assert_eq!(args, vec![String::from("before\\ "), String::from("after")]);
-    }
-
-    #[test]
-    fn backslash_n_becomes_just_n() {
-        let mut parser = Parser::new(String::from(r#"test\nexample"#));
-        let args = parser.parse();
-        assert_eq!(args, vec![String::from(r#"test\nexample"#)]);
-    }
-
-    #[test]
-    fn the_first_backslash_escapes_the_second() {
-        let mut parser = Parser::new(String::from(r#"hello\\world"#));
-        let args = parser.parse();
-        assert_eq!(args, vec![String::from(r#"hello\\world"#)]);
-    }
-
-    #[test]
-    fn backslash_quote_makes_the_quote_literal_character() {
-        let mut parser = Parser::new(String::from(r#"\'hello\'"#));
-        let args = parser.parse();
-        assert_eq!(args, vec![String::from(r#"\'hello\'"#)]);
-    }
-
-    #[test]
-    fn echo_each_backslash_creates_a_literal_space_as_part_of_one_argument() {
-        let mut parser = Parser::new(String::from(r#"echo three\ \ \ spaces"#));
+    #[rstest]
+    #[case(r#"hello    world"#, vec!["hello", "world"])]
+    #[case(r#"'hello    world'"#, vec!["hello    world"])]
+    #[case(r#"'hello''world'"#, vec!["helloworld"])]
+    #[case(r#"hello''world"#, vec!["helloworld"])]
+    #[case(r#""hello    world""#, vec!["hello    world"])]
+    #[case(r#""hello""world""#, vec!["helloworld"])]
+    #[case(r#""hello" "world""#, vec!["hello", "world"])]
+    #[case(r#""shell's test""#, vec!["shell's test"])]
+    #[case(r#"three\ \ \ spaces"#, vec![r#"three\ \ \ spaces"#])]
+    #[case(r#"before\     after"#, vec!["before\\ ", "after"])]
+    #[case(r#"test\nexample"#, vec![r#"test\nexample"#])]
+    #[case(r#"hello\\world"#, vec![r#"hello\\world"#])]
+    #[case(r#"\'hello\'"#, vec![r#"\'hello\'"#])]
+    #[case(r#"echo three\ \ \ spaces"#, vec!["echo", "three   spaces"])]
+    #[case(r#"echo before\  after"#, vec!["echo", "before ", "after"])]
+    #[case(r#"echo test\nexample"#, vec!["echo", "testnexample"])]
+    #[case(r#"echo hello\\world"#, vec!["echo", r#"hello\world"#])]
+    #[case(r#"echo \'hello\'"#, vec!["echo", "'hello'"])]
+    #[case(r#"echo 'shell\\\nscript'"#, vec!["echo", r#"shell\\\nscript"#])]
+    #[case(r#"echo 'example\"test'"#, vec!["echo", r#"example\"test"#])]
+    #[case(r#"echo "hello'test'\\'script""#, vec!["echo", r#"hello'test'\'script"#])]
+    fn parser_test(#[case] input: &str, #[case] expected: Vec<&str>) {
+        let mut parser = Parser::new(String::from(input));
         let args = parser.parse();
         assert_eq!(
             args,
-            vec![String::from("echo"), String::from("three   spaces")]
-        );
-    }
-
-    #[test]
-    fn echo_the_backslash_preserves_the_first_space_literally_but_the_shell_collapses_the_subsequent_unescaped_spaces()
-     {
-        let mut parser = Parser::new(String::from(r#"echo before\  after"#));
-        let args = parser.parse();
-        assert_eq!(
-            args,
-            vec![
-                String::from("echo"),
-                String::from("before "),
-                String::from("after")
-            ]
-        );
-    }
-
-    #[test]
-    fn echo_backslash_n_becomes_just_n() {
-        let mut parser = Parser::new(String::from(r#"echo test\nexample"#));
-        let args = parser.parse();
-        assert_eq!(
-            args,
-            vec![String::from("echo"), String::from("testnexample")]
-        );
-    }
-
-    #[test]
-    fn echo_first_backslash_escapes_the_second() {
-        let mut parser = Parser::new(String::from(r#"echo hello\\world"#));
-        let args = parser.parse();
-        assert_eq!(
-            args,
-            vec![String::from("echo"), String::from(r#"hello\world"#)]
-        );
-    }
-
-    #[test]
-    fn echo_backslash_quote_makes_the_quote_literal_character() {
-        let mut parser = Parser::new(String::from(r#"echo \'hello\'"#));
-        let args = parser.parse();
-        assert_eq!(args, vec![String::from("echo"), String::from("'hello'")]);
-    }
-
-    #[test]
-    fn echo_backslashes_in_single_quotes() {
-        let mut parser = Parser::new(String::from(r#"echo 'shell\\\nscript'"#));
-        let args = parser.parse();
-        assert_eq!(
-            args,
-            vec![String::from("echo"), String::from(r#"shell\\\nscript"#)]
-        );
-    }
-
-    #[test]
-    fn echo_backslashes_in_single_quotes_escape_double_quote() {
-        let mut parser = Parser::new(String::from(r#"echo 'example\"test'"#));
-        let args = parser.parse();
-        assert_eq!(
-            args,
-            vec![String::from("echo"), String::from(r#"example\"test"#)]
-        );
-    }
-
-    #[test]
-    fn echo_backslashes_in_double_quotes() {
-        let mut parser = Parser::new(String::from(r#"echo "hello'test'\\'script""#));
-        let args = parser.parse();
-        assert_eq!(
-            args,
-            vec![String::from("echo"), String::from(r#"hello'test'\'script"#)]
+            expected
+                .iter()
+                .cloned()
+                .map(String::from)
+                .collect::<Vec<String>>()
         );
     }
 }

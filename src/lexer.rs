@@ -129,79 +129,62 @@ pub enum TokenKind {
 mod tests {
     use super::*;
     use pretty_assertions::assert_eq;
+    use rstest::rstest;
 
-    #[test]
-    fn simple() {
-        let mut lexer = Lexer::new(String::from(r#"hello    world"#));
+    #[rstest]
+    #[case(r#"hello    world"#, vec![
+        Token {
+            kind: TokenKind::String,
+            lexeme: String::from("hello"),
+        },
+        Token {
+            kind: TokenKind::Whitespace,
+            lexeme: String::from("    "),
+        },
+        Token {
+            kind: TokenKind::String,
+            lexeme: String::from("world")
+        },
+        Token {
+            kind: TokenKind::EOF,
+            lexeme: String::new(),
+        }
+    ])]
+    #[case(r#"'hello    world'"#, vec![
+        Token {
+            kind: TokenKind::SingleQuote,
+            lexeme: String::from("'")
+        },
+        Token {
+            kind: TokenKind::String,
+            lexeme: String::from("hello")
+        },
+        Token {
+            kind: TokenKind::Whitespace,
+            lexeme: String::from("    ")
+        },
+        Token {
+            kind: TokenKind::String,
+            lexeme: String::from("world")
+        },
+        Token {
+            kind: TokenKind::SingleQuote,
+            lexeme: String::from("'")
+        },
+        Token {
+            kind: TokenKind::EOF,
+            lexeme: String::new(),
+        }
+    ])]
+    #[case("", vec![
+        Token {
+            kind: TokenKind::EOF,
+            lexeme: String::from("")
+        }
+    ])]
+    fn lexer_test(#[case] input: &str, #[case] expected_tokens: Vec<Token>) {
+        let mut lexer = Lexer::new(String::from(input));
         let tokens = lexer.lex();
-        assert_eq!(
-            tokens,
-            vec![
-                Token {
-                    kind: TokenKind::String,
-                    lexeme: String::from("hello"),
-                },
-                Token {
-                    kind: TokenKind::Whitespace,
-                    lexeme: String::from("    "),
-                },
-                Token {
-                    kind: TokenKind::String,
-                    lexeme: String::from("world")
-                },
-                Token {
-                    kind: TokenKind::EOF,
-                    lexeme: String::new(),
-                }
-            ]
-        );
-    }
-
-    #[test]
-    fn spaces_within_quotes() {
-        let mut lexer = Lexer::new(String::from(r#"'hello    world'"#));
-        let tokens = lexer.lex();
-        assert_eq!(
-            tokens,
-            vec![
-                Token {
-                    kind: TokenKind::SingleQuote,
-                    lexeme: String::from("'")
-                },
-                Token {
-                    kind: TokenKind::String,
-                    lexeme: String::from("hello")
-                },
-                Token {
-                    kind: TokenKind::Whitespace,
-                    lexeme: String::from("    ")
-                },
-                Token {
-                    kind: TokenKind::String,
-                    lexeme: String::from("world")
-                },
-                Token {
-                    kind: TokenKind::SingleQuote,
-                    lexeme: String::from("'")
-                },
-                Token {
-                    kind: TokenKind::EOF,
-                    lexeme: String::new(),
-                }
-            ]
-        );
-    }
-
-    #[test]
-    fn empty_input() {
-        let mut lexer = Lexer::new(String::from(""));
-        let tokens = lexer.lex();
-        assert_eq!(
-            tokens,
-            vec![Token {
-                kind: TokenKind::EOF,
-                lexeme: String::from("")
-            },]
-        );
+        assert_eq!(tokens, expected_tokens,);
     }
 }

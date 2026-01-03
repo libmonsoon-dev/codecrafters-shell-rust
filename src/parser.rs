@@ -65,10 +65,20 @@ impl Parser {
     }
 
     fn handle_double_quote(&mut self) -> Option<String> {
-        if !self.quotes.is_empty() && self.quotes.last().unwrap() == &TokenKind::DoubleQuote {
-            self.quotes.pop();
-        } else {
+        if self.quotes.is_empty() {
             self.quotes.push(TokenKind::DoubleQuote);
+            return None;
+        }
+
+        if self.quotes.last().unwrap() == &TokenKind::DoubleQuote {
+            self.quotes.pop();
+        } else if self.quotes.last().unwrap() == &TokenKind::SingleQuote {
+            self.argument_buffer.push('"');
+        } else {
+            unimplemented!(
+                "handle double quote if current quotes are {:?}",
+                self.quotes
+            );
         }
 
         None
@@ -166,6 +176,11 @@ mod tests {
     #[case(r#"cat "/tmp/fox/\"f 32\"""#, vec!["cat", r#"/tmp/fox/"f 32""#])]
     #[case(r#"cat "/tmp/fox/\"f\\87\"""#, vec!["cat", r#"/tmp/fox/"f\87""#])]
     #[case(r#"cat "/tmp/fox/f17""#, vec!["cat", "/tmp/fox/f17"])]
+    #[case(r#"'my program' argument1"#, vec!["my program", "argument1"])]
+    #[case(r#""exe with spaces" file.txt"#, vec!["exe with spaces", "file.txt"])]
+    #[case(r#"'exe with "quotes"' file"#, vec![r#"exe with "quotes""#, "file"])]
+    #[case(r#""exe with 'single quotes'" file"#, vec!["exe with 'single quotes'", "file"])]
+    #[case(r#"'exe with \n newline' arg"#, vec![r#"exe with \n newline"#, "arg"])]
     fn parser_test(#[case] input: &str, #[case] expected: Vec<&str>) {
         let mut parser = Parser::new(String::from(input));
         let args = parser.parse();

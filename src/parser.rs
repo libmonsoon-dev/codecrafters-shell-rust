@@ -34,7 +34,7 @@ impl Parser {
     }
 
     fn next_argument(&mut self) -> Option<String> {
-        match self.current_token() {
+        let token = match self.current_token() {
             token if token.kind == TokenKind::SingleQuote => self.handle_single_quote(),
             token if token.kind == TokenKind::DoubleQuote => self.handle_double_quote(),
             token if token.kind == TokenKind::String => self.handle_string(),
@@ -42,7 +42,10 @@ impl Parser {
             token if token.kind == TokenKind::Whitespace => self.handle_whitespace(),
             token if token.kind == TokenKind::EOF => self.handle_eof(),
             token => unimplemented!("{token:?} handling"),
-        }
+        };
+        self.position += 1;
+
+        token
     }
 
     fn current_token(&self) -> &Token {
@@ -57,7 +60,6 @@ impl Parser {
         } else {
             self.argument_buffer.push('\'')
         }
-        self.position += 1;
 
         None
     }
@@ -68,7 +70,6 @@ impl Parser {
         } else {
             self.quotes.push(TokenKind::DoubleQuote);
         }
-        self.position += 1;
 
         None
     }
@@ -76,7 +77,6 @@ impl Parser {
     fn handle_string(&mut self) -> Option<String> {
         let lexeme = self.current_token().lexeme.clone();
         self.argument_buffer.push_str(&lexeme);
-        self.position += 1;
 
         None
     }
@@ -104,7 +104,6 @@ impl Parser {
                 self.quotes
             );
         }
-        self.position += 1;
 
         None
     }
@@ -119,7 +118,6 @@ impl Parser {
             self.flush_buf()
         };
 
-        self.position += 1;
         result
     }
 
@@ -136,7 +134,6 @@ impl Parser {
 
     fn handle_eof(&mut self) -> Option<String> {
         let result = self.flush_buf();
-        self.position += 1;
 
         result
     }

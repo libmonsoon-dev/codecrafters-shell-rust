@@ -1,12 +1,11 @@
-use crate::parser::Parser;
+use crate::parser::{OutputStream, Parser, Redirect};
 use crate::print;
 use std::env;
 use std::fs;
 use std::io::{self, Write};
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
-use std::process::exit;
-use std::process::Command;
+use std::process;
 use std::sync::Once;
 
 static BUILTIN_COMMANDS: &[&str] = &["exit", "echo", "type", "pwd", "cd"];
@@ -14,10 +13,12 @@ static BUILTIN_COMMANDS: &[&str] = &["exit", "echo", "type", "pwd", "cd"];
 pub struct Shell {
     input: io::Stdin,
     output: io::Stdout,
+    errors: io::Stderr,
     input_buffer: String,
     command: Vec<String>,
     env_once: Once,
     path: Vec<String>,
+    redirects: Vec<Redirect>,
 }
 
 impl Shell {
@@ -25,10 +26,12 @@ impl Shell {
         Shell {
             input: io::stdin(),
             output: io::stdout(),
+            errors: io::stderr(),
             input_buffer: String::new(),
             command: Vec::new(),
             env_once: Once::new(),
             path: Vec::new(),
+            redirects: Vec::new(),
         }
     }
 
@@ -36,7 +39,8 @@ impl Shell {
         self.input_buffer.clear();
         self.input.read_line(&mut self.input_buffer)?;
 
-        self.command = Parser::new(self.input_buffer.clone()).parse();
+        //TODO: pass this vectors to parser to avoid allocations
+        (self.command, self.redirects) = Parser::new(self.input_buffer.clone()).parse();
 
         Ok(())
     }
@@ -48,7 +52,7 @@ impl Shell {
 
         if BUILTIN_COMMANDS.contains(&self.command[0].as_ref()) {
             match self.command[0].as_ref() {
-                "exit" => exit(0),
+                "exit" => process::exit(0),
                 "echo" => self.echo_builtin()?,
                 "type" => self.type_builtin()?,
                 "pwd" => print!(self, "{}\n", env::current_dir()?.display()),
@@ -60,17 +64,33 @@ impl Shell {
         }
 
         if let Some(_) = self.lookup_path(self.command[0].clone())? {
-            let mut cmd = Command::new(self.command[0].clone());
+            let mut cmd = process::Command::new(self.command[0].clone());
 
             self.command[1..].iter().for_each(|arg| {
                 cmd.arg(arg);
             });
 
-            // TODO: redirect stdout to self.output
-            let mut child = cmd.spawn()?;
-            // let mut stdout = child.stdout.take().expect("handle present");
-            // io::copy(&mut stdout, &mut self.output)?;
+            let mut child = cmd
+                .stdout(process::Stdio::piped())
+                .stderr(process::Stdio::piped())
+                .spawn()?;
+
+            let mut child_stdout = child.stdout.take().expect("handle present");
+            let mut output = self.get_output()?;
+            // let stdout_thread = thread::spawn(move || {
+            io::copy(&mut child_stdout, &mut output).unwrap();
+            // });
+            drop(output);
+
+            let mut child_stderr = child.stderr.take().expect("handle present");
+            let mut errors = self.get_error_output()?;
+            // let stderr_thread = thread::spawn(move || {
+            io::copy(&mut child_stderr, &mut errors).unwrap();
+            // });
+
             child.wait()?;
+            // stdout_thread.join().unwrap();
+            // stderr_thread.join().unwrap();
 
             return Ok(());
         }
@@ -165,8 +185,35 @@ impl Shell {
     }
 
     fn echo_builtin(&mut self) -> io::Result<()> {
-        print!(self, "{}\n", self.command[1..].join(" "));
+        let str = self.command[1..].join(" ");
+        self.get_output()?.write_fmt(format_args!("{str}\n"))?;
 
         Ok(())
+    }
+
+    fn get_output(&mut self) -> io::Result<Box<dyn io::Write + '_>> {
+        let Some(redirect) = self
+            .redirects
+            .iter()
+            .find(|r| r.from == OutputStream::Stdout)
+        else {
+            return Ok(Box::new(&self.output));
+        };
+
+        let file = redirect.open_output()?;
+        Ok(Box::new(file))
+    }
+
+    fn get_error_output(&mut self) -> io::Result<Box<dyn io::Write + '_>> {
+        let Some(redirect) = self
+            .redirects
+            .iter()
+            .find(|r| r.from == OutputStream::Stderr)
+        else {
+            return Ok(Box::new(&self.errors));
+        };
+
+        let file = redirect.open_output()?;
+        Ok(Box::new(file))
     }
 }

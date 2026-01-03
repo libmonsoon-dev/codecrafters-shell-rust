@@ -1,4 +1,3 @@
-use crate::interpreter::Interpreter;
 use crate::lexer::{Lexer, Token, TokenKind};
 
 pub struct Parser {
@@ -6,8 +5,6 @@ pub struct Parser {
     argument_buffer: String,
     position: usize,
     quotes: Vec<TokenKind>,
-    echo: bool,
-    arg_n: usize,
 }
 
 impl Parser {
@@ -17,8 +14,6 @@ impl Parser {
             argument_buffer: String::new(),
             position: 0,
             quotes: Vec::new(),
-            echo: false,
-            arg_n: 0,
         }
     }
 
@@ -43,6 +38,7 @@ impl Parser {
             token if token.kind == TokenKind::SingleQuote => self.handle_single_quote(),
             token if token.kind == TokenKind::DoubleQuote => self.handle_double_quote(),
             token if token.kind == TokenKind::String => self.handle_string(),
+            token if token.kind == TokenKind::EscapeSequence => self.handle_escape_sequence(),
             token if token.kind == TokenKind::Whitespace => self.handle_whitespace(),
             token if token.kind == TokenKind::EOF => self.handle_eof(),
             token => unimplemented!("{token:?} handling"),
@@ -78,22 +74,39 @@ impl Parser {
     }
 
     fn handle_string(&mut self) -> Option<String> {
-        let mut lexeme = self.current_token().lexeme.clone();
-        if self.echo {
-            lexeme = self.unescape(lexeme);
-        }
+        let lexeme = self.current_token().lexeme.clone();
         self.argument_buffer.push_str(&lexeme);
         self.position += 1;
 
         None
     }
 
-    fn unescape(&mut self, lexeme: String) -> String {
-        if !lexeme.contains('\\') {
-            return lexeme;
-        }
+    fn handle_escape_sequence(&mut self) -> Option<String> {
+        let lexeme = self.current_token().lexeme.clone();
+        let escape_char = lexeme.chars().nth(1).unwrap();
 
-        Interpreter::new(&lexeme, &mut self.quotes).interpret()
+        if self.quotes.is_empty() {
+            self.argument_buffer.push(escape_char);
+        } else if self.quotes.last() == Some(&TokenKind::DoubleQuote) {
+            static DOUBLE_QUOTE_ESCAPABLE: &[char] = &['"', '\\', '$', '`', '\n'];
+            if DOUBLE_QUOTE_ESCAPABLE.contains(&escape_char) {
+                self.argument_buffer.push(escape_char);
+            } else {
+                self.argument_buffer.push('\\');
+                self.argument_buffer.push(escape_char);
+            }
+        } else if self.quotes.last() == Some(&TokenKind::SingleQuote) {
+            self.argument_buffer.push('\\');
+            self.argument_buffer.push(escape_char);
+        } else {
+            unimplemented!(
+                "handle escape sequence if current quotes are {:?}",
+                self.quotes
+            );
+        }
+        self.position += 1;
+
+        None
     }
 
     fn handle_whitespace(&mut self) -> Option<String> {
@@ -118,11 +131,6 @@ impl Parser {
         let buf = self.argument_buffer.clone();
         self.argument_buffer.clear();
 
-        if self.arg_n == 0 {
-            self.echo = buf == "echo";
-        }
-
-        self.arg_n += 1;
         Some(buf)
     }
 
@@ -149,11 +157,6 @@ mod tests {
     #[case(r#""hello""world""#, vec!["helloworld"])]
     #[case(r#""hello" "world""#, vec!["hello", "world"])]
     #[case(r#""shell's test""#, vec!["shell's test"])]
-    #[case(r#"three\ \ \ spaces"#, vec![r#"three\ \ \ spaces"#])]
-    #[case(r#"before\     after"#, vec!["before\\ ", "after"])]
-    #[case(r#"test\nexample"#, vec![r#"test\nexample"#])]
-    #[case(r#"hello\\world"#, vec![r#"hello\\world"#])]
-    #[case(r#"\'hello\'"#, vec![r#"\'hello\'"#])]
     #[case(r#"echo three\ \ \ spaces"#, vec!["echo", "three   spaces"])]
     #[case(r#"echo before\  after"#, vec!["echo", "before ", "after"])]
     #[case(r#"echo test\nexample"#, vec!["echo", "testnexample"])]
@@ -161,7 +164,11 @@ mod tests {
     #[case(r#"echo \'hello\'"#, vec!["echo", "'hello'"])]
     #[case(r#"echo 'shell\\\nscript'"#, vec!["echo", r#"shell\\\nscript"#])]
     #[case(r#"echo 'example\"test'"#, vec!["echo", r#"example\"test"#])]
+    #[case(r#"echo 'world\"testhello\"shell'"#, vec!["echo", r#"world\"testhello\"shell"#])]
     #[case(r#"echo "hello'test'\\'script""#, vec!["echo", r#"hello'test'\'script"#])]
+    #[case(r#"cat "/tmp/fox/\"f 32\"""#, vec!["cat", r#"/tmp/fox/"f 32""#])]
+    #[case(r#"cat "/tmp/fox/\"f\\87\"""#, vec!["cat", r#"/tmp/fox/"f\87""#])]
+    #[case(r#"cat "/tmp/fox/f17""#, vec!["cat", "/tmp/fox/f17"])]
     fn parser_test(#[case] input: &str, #[case] expected: Vec<&str>) {
         let mut parser = Parser::new(String::from(input));
         let args = parser.parse();

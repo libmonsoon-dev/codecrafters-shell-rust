@@ -90,7 +90,7 @@ impl Lexer {
         self.position += 2;
 
         Token {
-            kind: TokenKind::String,
+            kind: TokenKind::EscapeSequence,
             lexeme,
         }
     }
@@ -120,6 +120,7 @@ pub enum TokenKind {
     SingleQuote,
     DoubleQuote,
     String,
+    EscapeSequence,
     Whitespace,
     EOF,
 }

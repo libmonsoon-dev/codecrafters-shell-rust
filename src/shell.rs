@@ -7,13 +7,11 @@ use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::process;
 use std::sync::Once;
+use std::thread;
 
 static BUILTIN_COMMANDS: &[&str] = &["exit", "echo", "type", "pwd", "cd"];
 
 pub struct Shell {
-    input: io::Stdin,
-    output: io::Stdout,
-    errors: io::Stderr,
     input_buffer: String,
     command: Vec<String>,
     env_once: Once,
@@ -24,9 +22,6 @@ pub struct Shell {
 impl Shell {
     pub fn new() -> Shell {
         Shell {
-            input: io::stdin(),
-            output: io::stdout(),
-            errors: io::stderr(),
             input_buffer: String::new(),
             command: Vec::new(),
             env_once: Once::new(),
@@ -37,7 +32,7 @@ impl Shell {
 
     fn read(&mut self) -> io::Result<()> {
         self.input_buffer.clear();
-        self.input.read_line(&mut self.input_buffer)?;
+        io::stdin().read_line(&mut self.input_buffer)?;
 
         //TODO: pass this vectors to parser to avoid allocations
         (self.command, self.redirects) = Parser::new(self.input_buffer.clone()).parse();
@@ -55,7 +50,7 @@ impl Shell {
                 "exit" => process::exit(0),
                 "echo" => self.echo_builtin()?,
                 "type" => self.type_builtin()?,
-                "pwd" => print!(self, "{}\n", env::current_dir()?.display()),
+                "pwd" => print!("{}\n", env::current_dir()?.display()),
                 "cd" => self.cd_builtin()?,
                 _ => unimplemented!("builtin command {}", self.command[0]),
             }
@@ -77,31 +72,30 @@ impl Shell {
 
             let mut child_stdout = child.stdout.take().expect("handle present");
             let mut output = self.get_output()?;
-            // let stdout_thread = thread::spawn(move || {
-            io::copy(&mut child_stdout, &mut output).unwrap();
-            // });
-            drop(output);
+            let stdout_thread = thread::spawn(move || {
+                io::copy(&mut child_stdout, &mut output).unwrap();
+            });
 
             let mut child_stderr = child.stderr.take().expect("handle present");
             let mut errors = self.get_error_output()?;
-            // let stderr_thread = thread::spawn(move || {
-            io::copy(&mut child_stderr, &mut errors).unwrap();
-            // });
+            let stderr_thread = thread::spawn(move || {
+                io::copy(&mut child_stderr, &mut errors).unwrap();
+            });
 
             child.wait()?;
-            // stdout_thread.join().unwrap();
-            // stderr_thread.join().unwrap();
+            stdout_thread.join().unwrap();
+            stderr_thread.join().unwrap();
 
             return Ok(());
         }
 
-        print!(self, "{}: command not found\n", self.command[0].trim());
+        print!("{}: command not found\n", self.command[0].trim());
         Ok(())
     }
 
     fn print(&mut self) -> io::Result<()> {
-        print!(self, "$ ");
-        self.output.flush()?;
+        print!("$ ");
+        io::stdout().flush()?;
 
         Ok(())
     }
@@ -121,16 +115,16 @@ impl Shell {
             .iter()
             .try_for_each(|arg| -> io::Result<()> {
                 if BUILTIN_COMMANDS.contains(&arg.as_str()) {
-                    print!(self, "{} is a shell builtin\n", arg);
+                    print!("{} is a shell builtin\n", arg);
                     return Ok(());
                 }
 
                 if let Some(path) = self.lookup_path(arg.clone())? {
-                    print!(self, "{} is {}\n", arg, path.display());
+                    print!("{} is {}\n", arg, path.display());
                     return Ok(());
                 }
 
-                print!(self, "{}: not found\n", arg);
+                print!("{}: not found\n", arg);
 
                 Ok(())
             })?;
@@ -175,7 +169,7 @@ impl Shell {
         };
         let attr = fs::metadata(path.clone());
         if matches!(attr, Err(ref err) if err.kind() == io::ErrorKind::NotFound) {
-            print!(self, "cd: {path}: No such file or directory\n");
+            print!("cd: {path}: No such file or directory\n");
             return Ok(());
         }
 
@@ -191,26 +185,26 @@ impl Shell {
         Ok(())
     }
 
-    fn get_output(&mut self) -> io::Result<Box<dyn io::Write + '_>> {
+    fn get_output(&mut self) -> io::Result<Box<dyn io::Write + Send>> {
         let Some(redirect) = self
             .redirects
             .iter()
             .find(|r| r.from == OutputStream::Stdout)
         else {
-            return Ok(Box::new(&self.output));
+            return Ok(Box::new(io::stdout()));
         };
 
         let file = redirect.open_output()?;
         Ok(Box::new(file))
     }
 
-    fn get_error_output(&mut self) -> io::Result<Box<dyn io::Write + '_>> {
+    fn get_error_output(&mut self) -> io::Result<Box<dyn io::Write + Send>> {
         let Some(redirect) = self
             .redirects
             .iter()
             .find(|r| r.from == OutputStream::Stderr)
         else {
-            return Ok(Box::new(&self.errors));
+            return Ok(Box::new(io::stderr()));
         };
 
         let file = redirect.open_output()?;

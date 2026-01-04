@@ -1,38 +1,38 @@
+use crate::bin_path::BinPath;
+use crate::editor::Editor;
 use crate::parser::{OutputStream, Parser, Redirect};
-use crate::read_line::{new_read_line, Editor};
 use crate::{print, BUILTIN_COMMANDS};
+use std::cell::RefCell;
 use std::env;
 use std::fs;
 use std::io::{self, Write};
-use std::os::unix::fs::PermissionsExt;
-use std::path::{Path, PathBuf};
 use std::process;
-use std::sync::Once;
+use std::rc::Rc;
 use std::thread;
 
 pub struct Shell {
-    read_line: Editor,
+    editor: Editor,
     input_buffer: String,
     command: Vec<String>,
-    env_once: Once,
-    path: Vec<String>,
+    bin_path: Rc<RefCell<BinPath>>,
     redirects: Vec<Redirect>,
 }
 
 impl Shell {
     pub fn new() -> anyhow::Result<Shell> {
+        let bin_path = Rc::new(RefCell::new(BinPath::new()));
+
         Ok(Shell {
-            read_line: new_read_line()?,
+            editor: Editor::new(bin_path.clone())?,
             input_buffer: String::new(),
             command: Vec::new(),
-            env_once: Once::new(),
-            path: Vec::new(),
+            bin_path,
             redirects: Vec::new(),
         })
     }
 
     fn read(&mut self) -> anyhow::Result<()> {
-        self.input_buffer = self.read_line.readline("$ ")?;
+        self.input_buffer = self.editor.readline("$ ")?;
 
         //TODO: pass this vectors to parser to avoid allocations
         (self.command, self.redirects) = Parser::new(self.input_buffer.clone()).parse();
@@ -58,8 +58,11 @@ impl Shell {
             return Ok(());
         }
 
-        if let Some(_) = self.lookup_path(self.command[0].clone())? {
-            let mut cmd = process::Command::new(self.command[0].clone());
+        let mut bin_path = self.bin_path.borrow_mut();
+        if let Some(_) = bin_path.lookup(&self.command[0])? {
+            drop(bin_path);
+
+            let mut cmd = process::Command::new(&self.command[0]);
 
             self.command[1..].iter().for_each(|arg| {
                 cmd.arg(arg);
@@ -109,7 +112,7 @@ impl Shell {
                     return Ok(());
                 }
 
-                if let Some(path) = self.lookup_path(arg.clone())? {
+                if let Some(path) = self.bin_path.borrow_mut().lookup(&arg)? {
                     print!("{} is {}\n", arg, path.display());
                     return Ok(());
                 }
@@ -120,35 +123,6 @@ impl Shell {
             })?;
 
         Ok(())
-    }
-
-    fn lookup_path(&mut self, bin: String) -> io::Result<Option<PathBuf>> {
-        self.load_path();
-        for dir in self.path.clone() {
-            let path = Path::new(&dir).join(bin.clone());
-            let result = fs::metadata(path.clone());
-            if matches!(result, Err(ref err) if err.kind() == io::ErrorKind::NotFound) {
-                continue;
-            }
-
-            let attr = result?;
-            //TODO: handle user and group permissions
-            if attr.permissions().mode() & 0o001 != 0 {
-                return Ok(Some(path));
-            }
-        }
-
-        Ok(None)
-    }
-
-    fn load_path(&mut self) {
-        self.env_once.call_once(|| {
-            self.path = env::var("PATH")
-                .unwrap()
-                .split(':')
-                .map(String::from)
-                .collect();
-        })
     }
 
     fn cd_builtin(&mut self) -> io::Result<()> {
@@ -176,7 +150,7 @@ impl Shell {
         Ok(())
     }
 
-    fn get_output(&mut self) -> io::Result<Box<dyn io::Write + Send>> {
+    fn get_output(&mut self) -> io::Result<Box<dyn Write + Send>> {
         let Some(redirect) = self
             .redirects
             .iter()
@@ -189,7 +163,7 @@ impl Shell {
         Ok(Box::new(file))
     }
 
-    fn get_error_output(&mut self) -> io::Result<Box<dyn io::Write + Send>> {
+    fn get_error_output(&mut self) -> io::Result<Box<dyn Write + Send>> {
         let Some(redirect) = self
             .redirects
             .iter()

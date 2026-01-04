@@ -236,7 +236,7 @@ impl Redirect {
         Ok(match self.redirect_type {
             RedirectType::Overwrite => fs::File::create(&self.to)?,
             RedirectType::Append => fs::OpenOptions::new()
-                .write(true)
+                .append(true)
                 .create(true)
                 .open(&self.to)?,
         })
@@ -289,6 +289,11 @@ mod tests {
         from: OutputStream::Stdout,
         redirect_type: RedirectType::Overwrite,
         to: String::from("file.txt"),
+    }])]
+    #[case("echo 'Hello Alice' 1>> file", vec!["echo", "Hello Alice"], vec![Redirect{
+        from: OutputStream::Stdout,
+        redirect_type: RedirectType::Append,
+        to: String::from("file"),
     }])]
     fn parser_test(
         #[case] input: &str,

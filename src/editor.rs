@@ -22,7 +22,11 @@ pub struct Editor {
 
 impl Editor {
     pub fn new(bin_path: Rc<RefCell<BinPath>>) -> anyhow::Result<Self> {
-        let mut editor = rustyline::Editor::<Helper, DefaultHistory>::new()?;
+        let config = rustyline::Config::builder()
+            .completion_type(rustyline::CompletionType::List)
+            .build();
+
+        let mut editor = rustyline::Editor::<Helper, DefaultHistory>::with_config(config)?;
         editor.set_helper(Some(Helper { bin_path }));
 
         Ok(Self { editor })

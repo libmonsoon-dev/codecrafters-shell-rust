@@ -24,6 +24,7 @@ impl Editor {
     pub fn new(bin_path: Rc<RefCell<BinPath>>) -> anyhow::Result<Self> {
         let config = rustyline::Config::builder()
             .completion_type(rustyline::CompletionType::List)
+            .indent_size(0)
             .build();
 
         let mut editor = rustyline::Editor::<Helper, DefaultHistory>::with_config(config)?;

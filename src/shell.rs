@@ -181,6 +181,7 @@ impl Shell {
     fn echo_builtin(&mut self) -> io::Result<()> {
         let str = self.command[1..].join(" ");
         self.get_output()?.write_fmt(format_args!("{str}\n"))?;
+        self.get_error_output()?; //create file if needed
 
         Ok(())
     }

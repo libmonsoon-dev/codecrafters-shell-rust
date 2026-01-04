@@ -1,5 +1,6 @@
 use crate::parser::{OutputStream, Parser, Redirect};
-use crate::print;
+use crate::read_line::{new_read_line, Editor};
+use crate::{print, BUILTIN_COMMANDS};
 use std::env;
 use std::fs;
 use std::io::{self, Write};
@@ -9,9 +10,8 @@ use std::process;
 use std::sync::Once;
 use std::thread;
 
-static BUILTIN_COMMANDS: &[&str] = &["exit", "echo", "type", "pwd", "cd"];
-
 pub struct Shell {
+    read_line: Editor,
     input_buffer: String,
     command: Vec<String>,
     env_once: Once,
@@ -20,19 +20,19 @@ pub struct Shell {
 }
 
 impl Shell {
-    pub fn new() -> Shell {
-        Shell {
+    pub fn new() -> anyhow::Result<Shell> {
+        Ok(Shell {
+            read_line: new_read_line()?,
             input_buffer: String::new(),
             command: Vec::new(),
             env_once: Once::new(),
             path: Vec::new(),
             redirects: Vec::new(),
-        }
+        })
     }
 
-    fn read(&mut self) -> io::Result<()> {
-        self.input_buffer.clear();
-        io::stdin().read_line(&mut self.input_buffer)?;
+    fn read(&mut self) -> anyhow::Result<()> {
+        self.input_buffer = self.read_line.readline("$ ")?;
 
         //TODO: pass this vectors to parser to avoid allocations
         (self.command, self.redirects) = Parser::new(self.input_buffer.clone()).parse();
@@ -93,20 +93,10 @@ impl Shell {
         Ok(())
     }
 
-    fn print(&mut self) -> io::Result<()> {
-        print!("$ ");
-        io::stdout().flush()?;
-
-        Ok(())
-    }
-
-    pub fn repl(&mut self) {
-        self.print().unwrap();
-
+    pub fn repl(&mut self) -> anyhow::Result<()> {
         loop {
-            self.read().unwrap();
-            self.eval().unwrap();
-            self.print().unwrap();
+            self.read()?;
+            self.eval()?;
         }
     }
 

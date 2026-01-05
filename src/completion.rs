@@ -34,11 +34,12 @@ impl completion::Completer for Helper {
             }
         }
 
+        // candidates.sort();
         Ok((start, candidates.into_iter().collect()))
     }
 }
 
-#[derive(Clone, Eq, PartialEq, Hash)]
+#[derive(Clone, Eq, PartialEq, Hash, Ord, PartialOrd)]
 pub struct Pair {
     pub display: String,
     pub replacement: String,

@@ -1,10 +1,11 @@
 use crate::editor::Helper;
 use crate::BUILTIN_COMMANDS;
-use rustyline::completion::{extract_word, Completer};
+use indexmap::IndexSet;
+use rustyline::completion;
 use std::path;
 
-impl Completer for Helper {
-    type Candidate = String;
+impl completion::Completer for Helper {
+    type Candidate = completion::Pair;
 
     fn complete(
         &self,
@@ -12,12 +13,12 @@ impl Completer for Helper {
         pos: usize,
         _ctx: &rustyline::Context<'_>,
     ) -> rustyline::Result<(usize, Vec<Self::Candidate>)> {
-        let (start, word) = extract_word(line, pos, None, |c| c == ' ');
-        let mut candidates = Vec::new();
+        let (start, word) = completion::extract_word(line, pos, None, |c| c == ' ');
+        let mut candidates = IndexSet::new();
 
         for comp in BUILTIN_COMMANDS {
             if comp.starts_with(word) {
-                candidates.push(append_trailing_space(comp));
+                candidates.insert(new_pair(comp.to_string()));
             }
         }
 
@@ -28,16 +29,19 @@ impl Completer for Helper {
             if let Some(basename) = path::Path::new(&bin_path).file_name() {
                 let basename = basename.display().to_string();
                 if basename.starts_with(word) {
-                    candidates.push(append_trailing_space(&basename))
+                    candidates.insert(new_pair(basename));
                 }
-            }
-
-            if bin_path.starts_with(word) {
-                candidates.push(append_trailing_space(&bin_path));
             }
         }
 
-        Ok((start, candidates))
+        Ok((start, candidates.into_iter().collect()))
+    }
+}
+
+fn new_pair(display: String) -> completion::Pair {
+    completion::Pair {
+        replacement: append_trailing_space(&display),
+        display,
     }
 }
 

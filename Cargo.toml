@@ -6,8 +6,9 @@ edition = "2024"
 rust-version = "1.91"
 
 [dependencies]
-rustyline = "17.0"
+rustyline = { git = "https://github.com/libmonsoon-dev/rustyline", branch = "codecrafters-fix" }
 anyhow = "1.0"
+indexmap = "2.0"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"

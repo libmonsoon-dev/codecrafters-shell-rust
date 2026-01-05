@@ -366,8 +366,9 @@ dependencies = [
 
 [[package]]
 name = "rustyline"
-version = "17.0.1"
-source = "git+https://github.com/libmonsoon-dev/rustyline?branch=codecrafters-fix#dfb418895a344a172dd4a7fd9a6119effc7168b9"
+version = "17.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e902948a25149d50edc1a8e0141aad50f54e22ba83ff988cf8f7c9ef07f50564"
 dependencies = [
  "bitflags",
  "cfg-if",

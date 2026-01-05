@@ -5,7 +5,7 @@ use rustyline::completion;
 use std::path;
 
 impl completion::Completer for Helper {
-    type Candidate = completion::Pair;
+    type Candidate = Pair;
 
     fn complete(
         &self,
@@ -18,7 +18,7 @@ impl completion::Completer for Helper {
 
         for comp in BUILTIN_COMMANDS {
             if comp.starts_with(word) {
-                candidates.insert(new_pair(comp.to_string()));
+                candidates.insert(Pair::new(comp.to_string()));
             }
         }
 
@@ -29,7 +29,7 @@ impl completion::Completer for Helper {
             if let Some(basename) = path::Path::new(&bin_path).file_name() {
                 let basename = basename.display().to_string();
                 if basename.starts_with(word) {
-                    candidates.insert(new_pair(basename));
+                    candidates.insert(Pair::new(basename));
                 }
             }
         }
@@ -38,10 +38,28 @@ impl completion::Completer for Helper {
     }
 }
 
-fn new_pair(display: String) -> completion::Pair {
-    completion::Pair {
-        replacement: append_trailing_space(&display),
-        display,
+#[derive(Clone, Eq, PartialEq, Hash)]
+pub struct Pair {
+    pub display: String,
+    pub replacement: String,
+}
+
+impl Pair {
+    fn new(display: String) -> Pair {
+        Self {
+            replacement: append_trailing_space(&display),
+            display,
+        }
+    }
+}
+
+impl completion::Candidate for Pair {
+    fn display(&self) -> &str {
+        self.display.as_str()
+    }
+
+    fn replacement(&self) -> &str {
+        self.replacement.as_str()
     }
 }
 

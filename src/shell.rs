@@ -1,6 +1,6 @@
 use crate::bin_path::BinPath;
 use crate::editor::Editor;
-use crate::parser::{OutputStream, Parser, Redirect};
+use crate::parser::{Command, Parser};
 use crate::{print, BUILTIN_COMMANDS};
 use std::cell::RefCell;
 use std::env;
@@ -12,10 +12,9 @@ use std::thread;
 
 pub struct Shell {
     editor: Editor,
-    input_buffer: String,
-    command: Vec<String>,
     bin_path: Rc<RefCell<BinPath>>,
-    redirects: Vec<Redirect>,
+    input_buffer: String,
+    command: Command,
 }
 
 impl Shell {
@@ -24,10 +23,12 @@ impl Shell {
 
         Ok(Shell {
             editor: Editor::new(bin_path.clone())?,
-            input_buffer: String::new(),
-            command: Vec::new(),
             bin_path,
-            redirects: Vec::new(),
+            input_buffer: String::new(),
+            command: Command {
+                args: Vec::new(),
+                redirects: Vec::new(),
+            },
         })
     }
 
@@ -35,36 +36,36 @@ impl Shell {
         self.input_buffer = self.editor.readline("$ ")?;
 
         //TODO: pass this vectors to parser to avoid allocations
-        (self.command, self.redirects) = Parser::new(self.input_buffer.clone()).parse();
+        self.command = Parser::new(self.input_buffer.clone()).parse();
 
         Ok(())
     }
 
     fn eval(&mut self) -> io::Result<()> {
-        if self.command.is_empty() {
+        if self.command.args.is_empty() {
             return Ok(());
         }
 
-        if BUILTIN_COMMANDS.contains(&self.command[0].as_ref()) {
-            match self.command[0].as_ref() {
+        if BUILTIN_COMMANDS.contains(&self.command.args[0].as_ref()) {
+            match self.command.args[0].as_ref() {
                 "exit" => process::exit(0),
                 "echo" => self.echo_builtin()?,
                 "type" => self.type_builtin()?,
                 "pwd" => print!("{}\n", env::current_dir()?.display()),
                 "cd" => self.cd_builtin()?,
-                _ => unimplemented!("builtin command {}", self.command[0]),
+                _ => unimplemented!("builtin command {}", self.command.args[0]),
             }
 
             return Ok(());
         }
 
         let mut bin_path = self.bin_path.borrow_mut();
-        if let Some(_) = bin_path.lookup(&self.command[0])? {
+        if let Some(_) = bin_path.lookup(&self.command.args[0])? {
             drop(bin_path);
 
-            let mut cmd = process::Command::new(&self.command[0]);
+            let mut cmd = process::Command::new(&self.command.args[0]);
 
-            self.command[1..].iter().for_each(|arg| {
+            self.command.args[1..].iter().for_each(|arg| {
                 cmd.arg(arg);
             });
 
@@ -74,13 +75,13 @@ impl Shell {
                 .spawn()?;
 
             let mut child_stdout = child.stdout.take().expect("handle present");
-            let mut output = self.get_output()?;
+            let mut output = self.command.get_output()?;
             let stdout_thread = thread::spawn(move || {
                 io::copy(&mut child_stdout, &mut output).unwrap();
             });
 
             let mut child_stderr = child.stderr.take().expect("handle present");
-            let mut errors = self.get_error_output()?;
+            let mut errors = self.command.get_error_output()?;
             let stderr_thread = thread::spawn(move || {
                 io::copy(&mut child_stderr, &mut errors).unwrap();
             });
@@ -92,7 +93,7 @@ impl Shell {
             return Ok(());
         }
 
-        print!("{}: command not found\n", self.command[0].trim());
+        print!("{}: command not found\n", self.command.args[0].trim());
         Ok(())
     }
 
@@ -104,7 +105,7 @@ impl Shell {
     }
 
     fn type_builtin(&mut self) -> io::Result<()> {
-        let _ = &self.command.clone()[1..]
+        let _ = &self.command.args.clone()[1..]
             .iter()
             .try_for_each(|arg| -> io::Result<()> {
                 if BUILTIN_COMMANDS.contains(&arg.as_str()) {
@@ -126,10 +127,10 @@ impl Shell {
     }
 
     fn cd_builtin(&mut self) -> io::Result<()> {
-        let path = if self.command.len() == 1 || self.command[1] == "~" {
+        let path = if self.command.args.len() == 1 || self.command.args[1] == "~" {
             env::var("HOME").unwrap()
         } else {
-            self.command[1].clone()
+            self.command.args[1].clone()
         };
         let attr = fs::metadata(path.clone());
         if matches!(attr, Err(ref err) if err.kind() == io::ErrorKind::NotFound) {
@@ -143,36 +144,12 @@ impl Shell {
     }
 
     fn echo_builtin(&mut self) -> io::Result<()> {
-        let str = self.command[1..].join(" ");
-        self.get_output()?.write_fmt(format_args!("{str}\n"))?;
-        self.get_error_output()?; //create file if needed
+        let str = self.command.args[1..].join(" ");
+        self.command
+            .get_output()?
+            .write_fmt(format_args!("{str}\n"))?;
+        self.command.get_error_output()?; //create file if needed
 
         Ok(())
-    }
-
-    fn get_output(&mut self) -> io::Result<Box<dyn Write + Send>> {
-        let Some(redirect) = self
-            .redirects
-            .iter()
-            .find(|r| r.from == OutputStream::Stdout)
-        else {
-            return Ok(Box::new(io::stdout()));
-        };
-
-        let file = redirect.open_output()?;
-        Ok(Box::new(file))
-    }
-
-    fn get_error_output(&mut self) -> io::Result<Box<dyn Write + Send>> {
-        let Some(redirect) = self
-            .redirects
-            .iter()
-            .find(|r| r.from == OutputStream::Stderr)
-        else {
-            return Ok(Box::new(io::stderr()));
-        };
-
-        let file = redirect.open_output()?;
-        Ok(Box::new(file))
     }
 }

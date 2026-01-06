@@ -1,4 +1,5 @@
 use crate::lexer::{Lexer, Token, TokenKind};
+use std::io::Write;
 use std::{fs, io, mem};
 
 pub struct Parser {
@@ -8,6 +9,47 @@ pub struct Parser {
     quotes: Vec<TokenKind>,
     args: Vec<String>,
     redirects: Vec<Redirect>,
+}
+
+#[derive(PartialEq, Debug)]
+pub struct Command {
+    pub(crate) args: Vec<String>,
+    pub(crate) redirects: Vec<Redirect>,
+}
+
+impl Command {
+    pub fn new(args: Vec<&str>, redirects: Vec<Redirect>) -> Self {
+        Self {
+            args: args.into_iter().map(String::from).collect(),
+            redirects,
+        }
+    }
+
+    pub(crate) fn get_output(&self) -> io::Result<Box<dyn Write + Send>> {
+        let Some(redirect) = self
+            .redirects
+            .iter()
+            .find(|r| r.from == OutputStream::Stdout)
+        else {
+            return Ok(Box::new(io::stdout()));
+        };
+
+        let file = redirect.open_output()?;
+        Ok(Box::new(file))
+    }
+
+    pub(crate) fn get_error_output(&mut self) -> io::Result<Box<dyn Write + Send>> {
+        let Some(redirect) = self
+            .redirects
+            .iter()
+            .find(|r| r.from == OutputStream::Stderr)
+        else {
+            return Ok(Box::new(io::stderr()));
+        };
+
+        let file = redirect.open_output()?;
+        Ok(Box::new(file))
+    }
 }
 
 impl Parser {
@@ -22,12 +64,19 @@ impl Parser {
         }
     }
 
-    pub fn parse(&mut self) -> (Vec<String>, Vec<Redirect>) {
+    pub fn parse(&mut self) -> Command {
         while !self.is_eof() {
             self.process_next_lexeme();
         }
 
-        (mem::take(&mut self.args), mem::take(&mut self.redirects))
+        self.current_command()
+    }
+
+    fn current_command(&mut self) -> Command {
+        Command {
+            args: mem::take(&mut self.args),
+            redirects: mem::take(&mut self.redirects),
+        }
     }
 
     fn is_eof(&self) -> bool {
@@ -91,13 +140,31 @@ impl Parser {
 
     fn handle_string(&mut self) -> Option<String> {
         let lexeme = self.current_token().lexeme.clone();
-        if lexeme.contains('>') {
+        if lexeme == "|" {
+            self.handle_pipe()
+        } else if lexeme.contains('>') {
             self.handle_redirect()
         } else {
             self.argument_buffer.push_str(&lexeme)
         }
 
         None
+    }
+
+    fn handle_pipe(&mut self) {
+        let args = mem::take(&mut self.args);
+        let mut redirects = mem::take(&mut self.redirects);
+
+        self.position += 1;
+        while !self.is_eof() {
+            //TODO: use iteration instead of recursion
+            self.process_next_lexeme();
+        }
+
+        redirects.push(Redirect::new_pipe(self.current_command()));
+
+        self.args = args;
+        self.redirects = redirects;
     }
 
     //TODO: return errors
@@ -132,14 +199,14 @@ impl Parser {
         }
 
         let remaining = chars.collect::<String>();
-        let to = if remaining.len() == 0 {
+        let to = OutputStream::File(if remaining.len() == 0 {
             self.position += 1;
             self.next_string()
         } else {
             self.argument_buffer.push_str(&remaining);
             self.position += 1;
             self.next_string()
-        };
+        });
 
         self.redirects.push(Redirect {
             from,
@@ -216,6 +283,8 @@ pub enum OutputStream {
     #[default]
     Stdout,
     Stderr,
+    File(String),
+    Pipe(Command),
 }
 
 #[derive(PartialEq, Debug)]
@@ -228,17 +297,30 @@ pub enum RedirectType {
 pub struct Redirect {
     pub from: OutputStream,
     pub redirect_type: RedirectType,
-    pub to: String,
+    pub to: OutputStream,
 }
 
 impl Redirect {
+    pub fn new_pipe(command: Command) -> Redirect {
+        Self {
+            from: OutputStream::Stdout,
+            redirect_type: RedirectType::Overwrite,
+            to: OutputStream::Pipe(command),
+        }
+    }
+
     pub fn open_output(&self) -> io::Result<fs::File> {
+        let filename = match &self.to {
+            OutputStream::File(filename) => filename,
+            output => unimplemented!("open output for {:?}", output),
+        };
+
         Ok(match self.redirect_type {
-            RedirectType::Overwrite => fs::File::create(&self.to)?,
+            RedirectType::Overwrite => fs::File::create(filename)?,
             RedirectType::Append => fs::OpenOptions::new()
                 .append(true)
                 .create(true)
-                .open(&self.to)?,
+                .open(filename)?,
         })
     }
 }
@@ -250,67 +332,65 @@ mod tests {
     use rstest::rstest;
 
     #[rstest]
-    #[case(r#"hello    world"#, vec!["hello", "world"], vec![])]
-    #[case(r#"'hello    world'"#, vec!["hello    world"], vec![])]
-    #[case(r#"'hello''world'"#, vec!["helloworld"], vec![])]
-    #[case(r#"hello''world"#, vec!["helloworld"], vec![])]
-    #[case(r#""hello    world""#, vec!["hello    world"], vec![])]
-    #[case(r#""hello""world""#, vec!["helloworld"], vec![])]
-    #[case(r#""hello" "world""#, vec!["hello", "world"], vec![])]
-    #[case(r#""shell's test""#, vec!["shell's test"], vec![])]
-    #[case(r#"echo three\ \ \ spaces"#, vec!["echo", "three   spaces"], vec![])]
-    #[case(r#"echo before\  after"#, vec!["echo", "before ", "after"], vec![])]
-    #[case(r#"echo test\nexample"#, vec!["echo", "testnexample"], vec![])]
-    #[case(r#"echo hello\\world"#, vec!["echo", r#"hello\world"#], vec![])]
-    #[case(r#"echo \'hello\'"#, vec!["echo", "'hello'"], vec![])]
-    #[case(r#"echo 'shell\\\nscript'"#, vec!["echo", r#"shell\\\nscript"#], vec![])]
-    #[case(r#"echo 'example\"test'"#, vec!["echo", r#"example\"test"#], vec![])]
-    #[case(r#"echo 'world\"testhello\"shell'"#, vec!["echo", r#"world\"testhello\"shell"#], vec![])]
-    #[case(r#"echo "hello'test'\\'script""#, vec!["echo", r#"hello'test'\'script"#], vec![])]
-    #[case(r#"cat "/tmp/fox/\"f 32\"""#, vec!["cat", r#"/tmp/fox/"f 32""#], vec![])]
-    #[case(r#"cat "/tmp/fox/\"f\\87\"""#, vec!["cat", r#"/tmp/fox/"f\87""#], vec![])]
-    #[case(r#"cat "/tmp/fox/f17""#, vec!["cat", "/tmp/fox/f17"], vec![])]
-    #[case(r#"'my program' argument1"#, vec!["my program", "argument1"], vec![])]
-    #[case(r#""exe with spaces" file.txt"#, vec!["exe with spaces", "file.txt"], vec![])]
-    #[case(r#"'exe with "quotes"' file"#, vec![r#"exe with "quotes""#, "file"], vec![])]
-    #[case(r#""exe with 'single quotes'" file"#, vec!["exe with 'single quotes'", "file"], vec![])]
-    #[case(r#"'exe with \n newline' arg"#, vec![r#"exe with \n newline"#, "arg"], vec![])]
-    #[case("echo hello > output.txt", vec!["echo", "hello"], vec![Redirect{
+    #[case(r#"hello    world"#, Command::new(vec!["hello", "world"], vec![]))]
+    #[case(r#"'hello    world'"#, Command::new(vec!["hello    world"], vec![]))]
+    #[case(r#"'hello''world'"#, Command::new(vec!["helloworld"], vec![]))]
+    #[case(r#"hello''world"#, Command::new(vec!["helloworld"], vec![]))]
+    #[case(r#""hello    world""#, Command::new(vec!["hello    world"], vec![]))]
+    #[case(r#""hello""world""#, Command::new(vec!["helloworld"], vec![]))]
+    #[case(r#""hello" "world""#, Command::new(vec!["hello", "world"], vec![]))]
+    #[case(r#""shell's test""#, Command::new(vec!["shell's test"], vec![]))]
+    #[case(r#"echo three\ \ \ spaces"#, Command::new(vec!["echo", "three   spaces"], vec![]))]
+    #[case(r#"echo before\  after"#, Command::new(vec!["echo", "before ", "after"], vec![]))]
+    #[case(r#"echo test\nexample"#, Command::new(vec!["echo", "testnexample"], vec![]))]
+    #[case(r#"echo hello\\world"#, Command::new(vec!["echo", r#"hello\world"#], vec![]))]
+    #[case(r#"echo \'hello\'"#, Command::new(vec!["echo", "'hello'"], vec![]))]
+    #[case(r#"echo 'shell\\\nscript'"#, Command::new(vec!["echo", r#"shell\\\nscript"#], vec![]))]
+    #[case(r#"echo 'example\"test'"#, Command::new(vec!["echo", r#"example\"test"#], vec![]))]
+    #[case(r#"echo 'world\"testhello\"shell'"#, Command::new(vec!["echo", r#"world\"testhello\"shell"#], vec![]))]
+    #[case(r#"echo "hello'test'\\'script""#, Command::new(vec!["echo", r#"hello'test'\'script"#], vec![]))]
+    #[case(r#"cat "/tmp/fox/\"f 32\"""#, Command::new(vec!["cat", r#"/tmp/fox/"f 32""#], vec![]))]
+    #[case(r#"cat "/tmp/fox/\"f\\87\"""#, Command::new(vec!["cat", r#"/tmp/fox/"f\87""#], vec![]))]
+    #[case(r#"cat "/tmp/fox/f17""#, Command::new(vec!["cat", "/tmp/fox/f17"], vec![]))]
+    #[case(r#"'my program' argument1"#, Command::new(vec!["my program", "argument1"], vec![]))]
+    #[case(r#""exe with spaces" file.txt"#, Command::new(vec!["exe with spaces", "file.txt"], vec![]))]
+    #[case(r#"'exe with "quotes"' file"#, Command::new(vec![r#"exe with "quotes""#, "file"], vec![]))]
+    #[case(r#""exe with 'single quotes'" file"#, Command::new(vec!["exe with 'single quotes'", "file"], vec![]))]
+    #[case(r#"'exe with \n newline' arg"#, Command::new(vec![r#"exe with \n newline"#, "arg"], vec![]))]
+    #[case("echo hello > output.txt", Command::new(vec!["echo", "hello"], vec![Redirect{
         from: OutputStream::default(),
         redirect_type: RedirectType::Overwrite,
-        to: String::from("output.txt"),
-    }])]
-    #[case("echo hello 1> file\\ txt", vec!["echo", "hello"], vec![Redirect{
+        to: OutputStream::File(String::from("output.txt")),
+    }]))]
+    #[case("echo hello 1> file\\ txt", Command::new(vec!["echo", "hello"], vec![Redirect{
         from: OutputStream::Stdout,
         redirect_type: RedirectType::Overwrite,
-        to: String::from("file txt"),
-    }])]
-    #[case("echo hello 1>fi''le.txt", vec!["echo", "hello"], vec![Redirect{
+        to: OutputStream::File(String::from("file txt")),
+    }]))]
+    #[case("echo hello 1>fi''le.txt", Command::new(vec!["echo", "hello"], vec![Redirect{
         from: OutputStream::Stdout,
         redirect_type: RedirectType::Overwrite,
-        to: String::from("file.txt"),
-    }])]
-    #[case("echo 'Hello Alice' 1>> file", vec!["echo", "Hello Alice"], vec![Redirect{
+        to: OutputStream::File(String::from("file.txt")),
+    }]))]
+    #[case("echo 'Hello Alice' 1>> file", Command::new(vec!["echo", "Hello Alice"], vec![Redirect{
         from: OutputStream::Stdout,
         redirect_type: RedirectType::Append,
-        to: String::from("file"),
-    }])]
-    fn parser_test(
-        #[case] input: &str,
-        #[case] expected: Vec<&str>,
-        #[case] expected_redirects: Vec<Redirect>,
-    ) {
+        to: OutputStream::File(String::from("file")),
+    }]))]
+    #[case("cat /tmp/foo/file | wc", Command::new(vec!["cat", "/tmp/foo/file"], vec![
+        Redirect::new_pipe(Command::new(vec!["wc"], vec![]))
+    ]))]
+    #[case("cat /tmp/foo/file | head -n 3 | wc", Command::new(vec!["cat", "/tmp/foo/file"], vec![
+        Redirect::new_pipe(Command::new(
+            vec!["head", "-n", "3"],
+            vec![
+                Redirect::new_pipe(Command::new(vec!["wc"], vec![]))
+            ],
+        ))
+    ]))]
+    fn parser_test(#[case] input: &str, #[case] expected: Command) {
         let mut parser = Parser::new(String::from(input));
-        let (args, redirects) = parser.parse();
-        assert_eq!(
-            args,
-            expected
-                .iter()
-                .cloned()
-                .map(String::from)
-                .collect::<Vec<String>>()
-        );
-
-        assert_eq!(redirects, expected_redirects);
+        let command = parser.parse();
+        assert_eq!(command, expected);
     }
 }

@@ -9,6 +9,7 @@ rust-version = "1.91"
 rustyline = "17.0.1"
 anyhow = "1.0"
 indexmap = "2.0"
+duct = "1.1.1"
 
 [dev-dependencies]
 pretty_assertions = "1.4.1"

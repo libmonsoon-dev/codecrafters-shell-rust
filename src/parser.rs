@@ -25,12 +25,14 @@ impl Command {
         }
     }
 
-    pub(crate) fn get_output(&self) -> io::Result<Box<dyn Write + Send>> {
-        let Some(redirect) = self
-            .redirects
+    pub(crate) fn output(&self) -> Option<&Redirect> {
+        self.redirects
             .iter()
             .find(|r| r.from == OutputStream::Stdout)
-        else {
+    }
+
+    pub(crate) fn get_output(&self) -> io::Result<Box<dyn Write + Send>> {
+        let Some(redirect) = self.output() else {
             return Ok(Box::new(io::stdout()));
         };
 
@@ -38,12 +40,14 @@ impl Command {
         Ok(Box::new(file))
     }
 
-    pub(crate) fn get_error_output(&mut self) -> io::Result<Box<dyn Write + Send>> {
-        let Some(redirect) = self
-            .redirects
+    pub(crate) fn errors(&self) -> Option<&Redirect> {
+        self.redirects
             .iter()
             .find(|r| r.from == OutputStream::Stderr)
-        else {
+    }
+
+    pub(crate) fn get_error_output(&self) -> io::Result<Box<dyn Write + Send>> {
+        let Some(redirect) = self.errors() else {
             return Ok(Box::new(io::stderr()));
         };
 

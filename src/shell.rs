@@ -1,14 +1,14 @@
 use crate::bin_path::BinPath;
 use crate::editor::Editor;
-use crate::parser::{Command, Parser};
+use crate::parser::{Command, OutputStream, Parser};
 use crate::{print, BUILTIN_COMMANDS};
+use duct::cmd;
 use std::cell::RefCell;
 use std::env;
 use std::fs;
 use std::io::{self, Write};
 use std::process;
 use std::rc::Rc;
-use std::thread;
 
 pub struct Shell {
     editor: Editor,
@@ -59,36 +59,22 @@ impl Shell {
             return Ok(());
         }
 
-        let mut bin_path = self.bin_path.borrow_mut();
-        if let Some(_) = bin_path.lookup(&self.command.args[0])? {
-            drop(bin_path);
+        if let Some(bin) = self.bin_path.borrow_mut().lookup(&self.command.args[0])? {
+            let mut command = &self.command;
+            let mut expression = cmd(&bin, self.command.args[1..].iter());
 
-            let mut cmd = process::Command::new(&self.command.args[0]);
+            while let Some(output) = command.output() {
+                let OutputStream::Pipe(pipe) = &output.to else {
+                    break;
+                };
 
-            self.command.args[1..].iter().for_each(|arg| {
-                cmd.arg(arg);
-            });
+                command = pipe;
+                expression = expression.pipe(cmd(&pipe.args[0], pipe.args[1..].iter()));
+            }
 
-            let mut child = cmd
-                .stdout(process::Stdio::piped())
-                .stderr(process::Stdio::piped())
-                .spawn()?;
-
-            let mut child_stdout = child.stdout.take().expect("handle present");
-            let mut output = self.command.get_output()?;
-            let stdout_thread = thread::spawn(move || {
-                io::copy(&mut child_stdout, &mut output).unwrap();
-            });
-
-            let mut child_stderr = child.stderr.take().expect("handle present");
-            let mut errors = self.command.get_error_output()?;
-            let stderr_thread = thread::spawn(move || {
-                io::copy(&mut child_stderr, &mut errors).unwrap();
-            });
-
-            child.wait()?;
-            stdout_thread.join().unwrap();
-            stderr_thread.join().unwrap();
+            let output = expression.stdout_capture().stderr_capture().run()?;
+            command.get_output()?.write_all(&output.stdout)?;
+            command.get_error_output()?.write_all(&output.stderr)?;
 
             return Ok(());
         }

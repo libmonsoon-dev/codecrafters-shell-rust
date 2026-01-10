@@ -60,10 +60,7 @@ impl Shell {
         }
 
         if let Some(bin) = self.bin_path.borrow_mut().lookup(&self.command.args[0])? {
-            let mut command = self.command.clone();
-            command.args[0] = bin.display().to_string();
-
-            Pipeline::new(&command).run()?;
+            Pipeline::new(&self.command).run()?;
 
             return Ok(());
         }

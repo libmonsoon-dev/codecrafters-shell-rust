@@ -27,7 +27,7 @@ impl<'a> Pipeline<'a> {
 
             piped = true;
             let next_child =
-                self.exec(&command.args, child.stdin.take().map(process::Stdio::from))?;
+                self.exec(&pipe.args, child.stdout.take().map(process::Stdio::from))?;
             self.wait_process(child);
 
             command = pipe;

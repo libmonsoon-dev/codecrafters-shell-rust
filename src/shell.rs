@@ -1,8 +1,8 @@
 use crate::bin_path::BinPath;
 use crate::editor::Editor;
-use crate::parser::{Command, OutputStream, Parser};
+use crate::parser::{Command, Parser};
+use crate::pipeline::Pipeline;
 use crate::{print, BUILTIN_COMMANDS};
-use duct::cmd;
 use std::cell::RefCell;
 use std::env;
 use std::fs;
@@ -41,7 +41,7 @@ impl Shell {
         Ok(())
     }
 
-    fn eval(&mut self) -> io::Result<()> {
+    fn eval(&mut self) -> anyhow::Result<()> {
         if self.command.args.is_empty() {
             return Ok(());
         }
@@ -60,21 +60,7 @@ impl Shell {
         }
 
         if let Some(bin) = self.bin_path.borrow_mut().lookup(&self.command.args[0])? {
-            let mut command = &self.command;
-            let mut expression = cmd(&bin, self.command.args[1..].iter());
-
-            while let Some(output) = command.output() {
-                let OutputStream::Pipe(pipe) = &output.to else {
-                    break;
-                };
-
-                command = pipe;
-                expression = expression.pipe(cmd(&pipe.args[0], pipe.args[1..].iter()));
-            }
-
-            let output = expression.stdout_capture().stderr_capture().run()?;
-            command.get_output()?.write_all(&output.stdout)?;
-            command.get_error_output()?.write_all(&output.stderr)?;
+            Pipeline::new(&self.command).run()?;
 
             return Ok(());
         }

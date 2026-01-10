@@ -25,25 +25,18 @@ impl<'a> Pipeline<'a> {
     pub fn run(&mut self) -> anyhow::Result<()> {
         let mut command = self.cmd;
         let mut process = self.call(&self.cmd.args, None)?;
-        // let mut piped = false;
 
         while let Some(output) = command.output() {
             let OutputStream::Pipe(pipe) = &output.to else {
                 break;
             };
 
-            // piped = true;
             let next_process = self.call(&pipe.args, Some(process.stdout()))?;
             process.wait(&mut self.threads);
 
             command = pipe;
             process = next_process;
         }
-
-        //TODO: remove
-        // if !piped {
-        //     self.copy_stdin(process.stdin(), io::empty())
-        // }
 
         self.copy_stdout(process.stdout(), command.get_output()?);
         self.copy_stderr(process.stderr(), command.get_error_output()?);
@@ -75,18 +68,6 @@ impl<'a> Pipeline<'a> {
         bail!("{}: command not found", args[0]);
     }
 
-    //TODO: remove
-    // fn copy_stdin<T: io::Read + Send + 'static>(&mut self, stdin: ProcessStdin, mut input: T) {
-    //     let mut stdin: Box<dyn io::Write + Send + 'static> = match stdin {
-    //         ProcessStdin::ChildStdin(stdin) => Box::new(stdin),
-    //     };
-    //
-    //     let stdin_thread = thread::spawn(move || {
-    //         io::copy(&mut input, &mut stdin).unwrap();
-    //     });
-    //     self.threads.push(stdin_thread);
-    // }
-
     fn copy_stdout<T: io::Write + Send + 'static>(&mut self, stdout: ProcessStdout, mut output: T) {
         let mut stdout: Box<dyn io::Read + Send + 'static> = match stdout {
             ProcessStdout::ChildStdout(stdout) => Box::new(stdout),
@@ -113,19 +94,12 @@ impl<'a> Pipeline<'a> {
 }
 
 trait Process {
-    // fn stdin(&mut self) -> ProcessStdin;
-
     fn stdout(&mut self) -> ProcessStdout;
 
     fn stderr(&mut self) -> ProcessStderr;
 
     fn wait(&mut self, threads: &mut Vec<thread::JoinHandle<()>>);
 }
-
-// enum ProcessStdin {
-//     ChildStdin(process::ChildStdin),
-//     Buffer(Vec<u8>),
-// }
 
 enum ProcessStdout {
     ChildStdout(process::ChildStdout),
@@ -211,10 +185,6 @@ impl<'a> BuiltinProcess<'a> {
 }
 
 impl<'a> Process for BuiltinProcess<'a> {
-    // fn stdin(&mut self) -> ProcessStdin {
-    //     todo!()
-    // }
-
     fn stdout(&mut self) -> ProcessStdout {
         ProcessStdout::Buffer(mem::take(&mut self.output))
     }
@@ -267,17 +237,6 @@ impl<'a> ExternalProcess {
 }
 
 impl Process for ExternalProcess {
-    // fn stdin(&mut self) -> ProcessStdin {
-    //     ProcessStdin::ChildStdin(
-    //         self.child
-    //             .as_mut()
-    //             .unwrap()
-    //             .stdin
-    //             .take()
-    //             .expect("handle present"),
-    //     )
-    // }
-
     fn stdout(&mut self) -> ProcessStdout {
         ProcessStdout::ChildStdout(
             self.child

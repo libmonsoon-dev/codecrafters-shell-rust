@@ -7,4 +7,4 @@ pub mod parser;
 pub mod pipeline;
 pub mod shell;
 
-pub static BUILTIN_COMMANDS: &[&str] = &["exit", "echo", "type", "pwd", "cd"];
+pub static BUILTIN_COMMANDS: &[&str] = &["exit", "echo", "type", "pwd", "cd", "history"];

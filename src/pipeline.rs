@@ -1,4 +1,5 @@
 use crate::bin_path::BinPath;
+use crate::editor::Editor;
 use crate::parser::{Command, OutputStream};
 use crate::{print_to, BUILTIN_COMMANDS};
 use anyhow::bail;
@@ -10,14 +11,20 @@ use std::{env, fs, io, mem, process, thread};
 pub struct Pipeline<'a> {
     cmd: &'a Command,
     bin_path: Rc<RefCell<BinPath>>,
+    editor: Rc<RefCell<Editor>>,
     threads: Vec<thread::JoinHandle<()>>,
 }
 
 impl<'a> Pipeline<'a> {
-    pub fn new(cmd: &'a Command, bin_path: Rc<RefCell<BinPath>>) -> Self {
+    pub fn new(
+        cmd: &'a Command,
+        bin_path: Rc<RefCell<BinPath>>,
+        editor: Rc<RefCell<Editor>>,
+    ) -> Self {
         Self {
             cmd,
             bin_path,
+            editor,
             threads: Vec::with_capacity(4),
         }
     }
@@ -58,6 +65,7 @@ impl<'a> Pipeline<'a> {
             return Ok(Box::new(BuiltinProcess::new(
                 args,
                 Rc::clone(&self.bin_path),
+                Rc::clone(&self.editor),
             )));
         }
 
@@ -114,14 +122,20 @@ enum ProcessStderr {
 struct BuiltinProcess<'a> {
     args: &'a Vec<String>,
     bin_path: Rc<RefCell<BinPath>>,
+    editor: Rc<RefCell<Editor>>,
     output: Vec<u8>,
 }
 
 impl<'a> BuiltinProcess<'a> {
-    fn new(args: &'a Vec<String>, bin_path: Rc<RefCell<BinPath>>) -> Self {
+    fn new(
+        args: &'a Vec<String>,
+        bin_path: Rc<RefCell<BinPath>>,
+        editor: Rc<RefCell<Editor>>,
+    ) -> Self {
         let mut p = Self {
             args,
             bin_path,
+            editor,
             output: Vec::new(),
         };
 
@@ -131,6 +145,7 @@ impl<'a> BuiltinProcess<'a> {
             "type" => p.type_builtin().unwrap(),
             "pwd" => print_to!(p.output, "{}\n", env::current_dir().unwrap().display()),
             "cd" => p.cd_builtin().unwrap(),
+            "history" => p.history_builtin().unwrap(),
             _ => unimplemented!("builtin command {}", p.args[0]),
         }
 
@@ -179,6 +194,17 @@ impl<'a> BuiltinProcess<'a> {
     fn echo_builtin(&mut self) -> io::Result<()> {
         let str = self.args[1..].join(" ");
         print_to!(self.output, "{str}\n");
+
+        Ok(())
+    }
+
+    fn history_builtin(&mut self) -> anyhow::Result<()> {
+        self.editor
+            .borrow_mut()
+            .history()
+            .iter()
+            .enumerate()
+            .for_each(|(num, line)| print_to!(self.output, "\t{num}  {line}\n"));
 
         Ok(())
     }

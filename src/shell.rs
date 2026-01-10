@@ -8,7 +8,7 @@ use std::fmt::Display;
 use std::rc::Rc;
 
 pub struct Shell {
-    editor: Editor,
+    editor: Rc<RefCell<Editor>>,
     bin_path: Rc<RefCell<BinPath>>,
     input_buffer: String,
     command: Command,
@@ -19,7 +19,7 @@ impl Shell {
         let bin_path = Rc::new(RefCell::new(BinPath::new()));
 
         Ok(Shell {
-            editor: Editor::new(bin_path.clone())?,
+            editor: Rc::new(RefCell::new(Editor::new(bin_path.clone())?)),
             bin_path,
             input_buffer: String::new(),
             command: Command {
@@ -30,7 +30,7 @@ impl Shell {
     }
 
     fn read(&mut self) -> anyhow::Result<()> {
-        self.input_buffer = self.editor.readline("$ ")?;
+        self.input_buffer = self.editor.borrow_mut().readline("$ ")?;
 
         //TODO: pass this vectors to parser to avoid allocations
         self.command = Parser::new(self.input_buffer.clone()).parse();
@@ -43,7 +43,12 @@ impl Shell {
             return Ok(());
         }
 
-        Pipeline::new(&self.command, Rc::clone(&self.bin_path)).run()?;
+        Pipeline::new(
+            &self.command,
+            Rc::clone(&self.bin_path),
+            Rc::clone(&self.editor),
+        )
+        .run()?;
         Ok(())
     }
 

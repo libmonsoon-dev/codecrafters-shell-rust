@@ -24,6 +24,7 @@ impl Editor {
     pub fn new(bin_path: Rc<RefCell<BinPath>>) -> anyhow::Result<Self> {
         let config = rustyline::Config::builder()
             .completion_type(rustyline::CompletionType::List)
+            .auto_add_history(true)
             .build();
 
         let mut editor = rustyline::Editor::<Helper, DefaultHistory>::with_config(config)?;
@@ -34,5 +35,9 @@ impl Editor {
 
     pub fn readline(&mut self, prompt: &str) -> rustyline::Result<String> {
         self.editor.readline(prompt)
+    }
+
+    pub fn history(&mut self) -> &DefaultHistory {
+        self.editor.history()
     }
 }

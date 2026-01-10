@@ -11,7 +11,7 @@ pub struct Parser {
     redirects: Vec<Redirect>,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Command {
     pub(crate) args: Vec<String>,
     pub(crate) redirects: Vec<Redirect>,
@@ -282,7 +282,7 @@ impl Parser {
     }
 }
 
-#[derive(Default, PartialEq, Debug)]
+#[derive(Default, PartialEq, Debug, Clone)]
 pub enum OutputStream {
     #[default]
     Stdout,
@@ -291,13 +291,13 @@ pub enum OutputStream {
     Pipe(Command),
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub enum RedirectType {
     Overwrite,
     Append,
 }
 
-#[derive(PartialEq, Debug)]
+#[derive(PartialEq, Debug, Clone)]
 pub struct Redirect {
     pub from: OutputStream,
     pub redirect_type: RedirectType,

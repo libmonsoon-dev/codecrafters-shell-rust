@@ -59,7 +59,7 @@ impl Shell {
             return Ok(());
         }
 
-        if let Some(bin) = self.bin_path.borrow_mut().lookup(&self.command.args[0])? {
+        if let Some(_) = self.bin_path.borrow_mut().lookup(&self.command.args[0])? {
             Pipeline::new(&self.command).run()?;
 
             return Ok(());

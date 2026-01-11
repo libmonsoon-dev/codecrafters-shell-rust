@@ -4,7 +4,6 @@ use crate::parser::{Command, Parser};
 use crate::pipeline::Pipeline;
 use crate::print;
 use std::cell::RefCell;
-use std::fmt::Display;
 use std::rc::Rc;
 
 pub struct Shell {
@@ -54,15 +53,29 @@ impl Shell {
 
     pub fn repl(&mut self) -> anyhow::Result<()> {
         loop {
-            print_err(self.read());
-            print_err(self.eval());
+            handle_err(self.read())?;
+            handle_err(self.eval())?;
         }
     }
 }
 
-fn print_err<T, E: Display>(result: Result<T, E>) {
+fn handle_err<T>(result: anyhow::Result<T>) -> anyhow::Result<()> {
     match result {
-        Ok(_) => {}
-        Err(err) => print!("{}\n", err),
+        Ok(_) => Ok(()),
+        Err(err) if contain::<rustyline::error::ReadlineError>(err.chain()) => Err(err),
+        Err(err) => {
+            print!("{}\n", err);
+            Ok(())
+        }
     }
+}
+
+fn contain<T: std::error::Error + 'static>(chain: anyhow::Chain) -> bool {
+    for cause in chain {
+        if cause.downcast_ref::<T>().is_some() {
+            return true;
+        }
+    }
+
+    false
 }

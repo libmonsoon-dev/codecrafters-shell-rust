@@ -40,4 +40,8 @@ impl Editor {
     pub fn history(&mut self) -> &DefaultHistory {
         self.editor.history()
     }
+
+    pub fn history_mut(&mut self) -> &mut DefaultHistory {
+        self.editor.history_mut()
+    }
 }

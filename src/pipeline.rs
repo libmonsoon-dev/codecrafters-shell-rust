@@ -3,6 +3,7 @@ use crate::editor::Editor;
 use crate::parser::{Command, OutputStream};
 use crate::{print_to, BUILTIN_COMMANDS};
 use anyhow::{bail, Context};
+use rustyline::history::History;
 use std::cell::RefCell;
 use std::collections::VecDeque;
 use std::io::Write;
@@ -201,16 +202,20 @@ impl<'a> BuiltinProcess<'a> {
 
     fn history_builtin(&mut self) -> anyhow::Result<()> {
         let mut editor = self.editor.borrow_mut();
-        let mut iter: Box<dyn Iterator<Item = (usize, &String)>> =
-            Box::new(editor.history().iter().enumerate());
 
-        if self.args.len() >= 2 {
+        if self.args.len() >= 3 && self.args[1] == "-r" {
+            editor.history_mut().load((self.args[2]).as_ref())?
+        } else if self.args.len() >= 2 {
             let num: usize = self.args[1].parse().context("failed to parse number")?;
+            let iter = editor.history().iter().enumerate();
 
-            iter = Box::new(last_n(iter, num).into_iter());
-        }
-
-        iter.for_each(|(num, line)| print_to!(self.output, "\t{num}  {line}\n"));
+            last_n(iter, num)
+                .into_iter()
+                .for_each(|(num, line)| print_to!(self.output, "\t{num}  {line}\n"));
+        } else {
+            let iter = editor.history().iter().enumerate();
+            iter.for_each(|(num, line)| print_to!(self.output, "\t{num}  {line}\n"))
+        };
 
         Ok(())
     }

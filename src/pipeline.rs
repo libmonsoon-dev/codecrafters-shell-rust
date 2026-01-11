@@ -206,15 +206,7 @@ impl<'a> BuiltinProcess<'a> {
         if self.args.len() >= 3 && self.args[1] == "-r" {
             editor.history_mut().load((self.args[2]).as_ref())?
         } else if self.args.len() >= 3 && self.args[1] == "-w" {
-            let file = fs::File::create(&self.args[2])?;
-            let mut buf = io::BufWriter::new(file);
-
-            editor
-                .history()
-                .iter()
-                .for_each(|line| print_to!(buf, "{line}\n"));
-
-            buf.flush()?;
+            editor.history_mut().save((self.args[2]).as_ref())?
         } else if self.args.len() >= 3 && self.args[1] == "-a" {
             editor.history_mut().append((self.args[2]).as_ref())?
         } else if self.args.len() >= 2 {

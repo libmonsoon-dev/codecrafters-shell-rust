@@ -2,8 +2,9 @@ use crate::bin_path::BinPath;
 use crate::editor::Editor;
 use crate::parser::{Command, OutputStream};
 use crate::{print_to, BUILTIN_COMMANDS};
-use anyhow::bail;
+use anyhow::{bail, Context};
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::io::Write;
 use std::rc::Rc;
 use std::{env, fs, io, mem, process, thread};
@@ -199,15 +200,34 @@ impl<'a> BuiltinProcess<'a> {
     }
 
     fn history_builtin(&mut self) -> anyhow::Result<()> {
-        self.editor
-            .borrow_mut()
-            .history()
-            .iter()
-            .enumerate()
-            .for_each(|(num, line)| print_to!(self.output, "\t{num}  {line}\n"));
+        let mut editor = self.editor.borrow_mut();
+        let mut iter: Box<dyn Iterator<Item = (usize, &String)>> =
+            Box::new(editor.history().iter().enumerate());
+
+        if self.args.len() >= 2 {
+            let num: usize = self.args[1].parse().context("failed to parse number")?;
+
+            iter = Box::new(last_n(iter, num).into_iter());
+        }
+
+        iter.for_each(|(num, line)| print_to!(self.output, "\t{num}  {line}\n"));
 
         Ok(())
     }
+}
+
+fn last_n<T>(iter: impl Iterator<Item = T>, n: usize) -> VecDeque<T> {
+    let mut buffer = VecDeque::with_capacity(n);
+
+    for item in iter {
+        if buffer.len() == n {
+            buffer.pop_front();
+        }
+
+        buffer.push_back(item);
+    }
+
+    buffer
 }
 
 impl<'a> Process for BuiltinProcess<'a> {

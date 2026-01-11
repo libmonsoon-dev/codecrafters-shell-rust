@@ -214,7 +214,6 @@ impl<'a> BuiltinProcess<'a> {
                 .iter()
                 .for_each(|line| print_to!(buf, "{line}\n"));
 
-            buf.write("\n".as_bytes())?;
             buf.flush()?;
         } else if self.args.len() >= 2 {
             let num: usize = self.args[1].parse().context("failed to parse number")?;

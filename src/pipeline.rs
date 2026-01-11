@@ -205,6 +205,8 @@ impl<'a> BuiltinProcess<'a> {
 
         if self.args.len() >= 3 && self.args[1] == "-r" {
             editor.history_mut().load((self.args[2]).as_ref())?
+        } else if self.args.len() >= 3 && self.args[1] == "-w" {
+            editor.history_mut().save((self.args[2]).as_ref())?
         } else if self.args.len() >= 2 {
             let num: usize = self.args[1].parse().context("failed to parse number")?;
             let iter = editor.history().iter().enumerate();

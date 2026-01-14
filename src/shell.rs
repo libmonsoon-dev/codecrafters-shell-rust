@@ -4,6 +4,7 @@ use crate::parser::{Command, Parser};
 use crate::pipeline::Pipeline;
 use crate::print;
 use std::cell::RefCell;
+use std::env;
 use std::rc::Rc;
 
 pub struct Shell {
@@ -17,7 +18,7 @@ impl Shell {
     pub fn new() -> anyhow::Result<Shell> {
         let bin_path = Rc::new(RefCell::new(BinPath::new()));
 
-        Ok(Shell {
+        let shell = Shell {
             editor: Rc::new(RefCell::new(Editor::new(bin_path.clone())?)),
             bin_path,
             input_buffer: String::new(),
@@ -25,7 +26,10 @@ impl Shell {
                 args: Vec::new(),
                 redirects: Vec::new(),
             },
-        })
+        };
+
+        shell.read_history()?;
+        Ok(shell)
     }
 
     fn read(&mut self) -> anyhow::Result<()> {
@@ -42,13 +46,12 @@ impl Shell {
             return Ok(());
         }
 
-        Pipeline::new(
-            &self.command,
-            Rc::clone(&self.bin_path),
-            Rc::clone(&self.editor),
-        )
-        .run()?;
+        self.new_pipeline(&self.command).run()?;
         Ok(())
+    }
+
+    fn new_pipeline<'a>(&'a self, command: &'a Command) -> Pipeline<'a> {
+        Pipeline::new(command, Rc::clone(&self.bin_path), Rc::clone(&self.editor))
     }
 
     pub fn repl(&mut self) -> anyhow::Result<()> {
@@ -56,6 +59,20 @@ impl Shell {
             handle_err(self.read())?;
             handle_err(self.eval())?;
         }
+    }
+
+    fn read_history(&self) -> anyhow::Result<()> {
+        let command = Command {
+            args: vec![
+                String::from("history"),
+                String::from("-r"),
+                env::var("HISTFILE")?,
+            ],
+            redirects: vec![],
+        };
+        self.new_pipeline(&command).run()?;
+
+        Ok(())
     }
 }
 

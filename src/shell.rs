@@ -5,6 +5,7 @@ use crate::pipeline::Pipeline;
 use crate::print;
 use std::cell::RefCell;
 use std::env;
+use std::env::VarError;
 use std::rc::Rc;
 
 pub struct Shell {
@@ -62,10 +63,26 @@ impl Shell {
     }
 
     fn read_history(&self) -> anyhow::Result<()> {
+        let history_file = env::var("HISTFILE");
+        match history_file {
+            Err(VarError::NotPresent) => return Ok(()),
+            _ => {}
+        }
+
+        let command = Command {
+            args: vec![String::from("history"), String::from("-r"), history_file?],
+            redirects: vec![],
+        };
+        self.new_pipeline(&command).run()?;
+
+        Ok(())
+    }
+
+    fn append_history(&mut self) -> anyhow::Result<()> {
         let command = Command {
             args: vec![
                 String::from("history"),
-                String::from("-r"),
+                String::from("-a"),
                 env::var("HISTFILE")?,
             ],
             redirects: vec![],

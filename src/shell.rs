@@ -113,7 +113,7 @@ fn handle_err<T>(result: anyhow::Result<T>) -> anyhow::Result<()> {
     }
 }
 
-fn contain<T: std::error::Error + 'static>(chain: anyhow::Chain) -> bool {
+pub fn contain<T: std::error::Error + 'static>(chain: anyhow::Chain) -> bool {
     for cause in chain {
         if cause.downcast_ref::<T>().is_some() {
             return true;

@@ -176,9 +176,9 @@ dependencies = [
 
 [[package]]
 name = "libc"
-version = "0.2.179"
+version = "0.2.180"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c5a2d376baa530d1238d133232d15e239abad80d05838b4b59354e5268af431f"
+checksum = "bcc35a38544a891a5f7c865aca548a982ccb3b8650a5b06d0fd33a10283c56fc"
 
 [[package]]
 name = "linux-raw-sys"
@@ -367,7 +367,7 @@ dependencies = [
 [[package]]
 name = "rustyline"
 version = "17.0.1"
-source = "git+https://github.com/libmonsoon-dev/rustyline?branch=codecrafters-fix#1acb7bc4e3459b2c73862aa78695a81d95e22883"
+source = "git+https://github.com/libmonsoon-dev/rustyline?branch=codecrafters-fix#382d19a3cc905f5e46e905d231e14a602a93b490"
 dependencies = [
  "bitflags",
  "cfg-if",

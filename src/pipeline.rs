@@ -144,7 +144,7 @@ impl<'a> BuiltinProcess<'a> {
         };
 
         p.result = match p.args[0].as_ref() {
-            "exit" => Err(ExitError::Exit.into()),
+            "exit" => Err(ExitError {}.into()),
             "echo" => p.echo_builtin(),
             "type" => p.type_builtin(),
             "pwd" => Ok(print_to!(

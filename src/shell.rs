@@ -2,7 +2,7 @@ use crate::bin_path::BinPath;
 use crate::editor::Editor;
 use crate::parser::{Command, Parser};
 use crate::pipeline::Pipeline;
-use crate::{print, CallError};
+use crate::{print, ExitError};
 use std::cell::RefCell;
 use std::env;
 use std::env::VarError;
@@ -105,7 +105,7 @@ fn handle_err<T>(result: anyhow::Result<T>) -> anyhow::Result<()> {
     match result {
         Ok(_) => Ok(()),
         Err(err) if contain::<rustyline::error::ReadlineError>(err.chain()) => Err(err),
-        Err(err) if contain::<CallError>(err.chain()) => Err(err),
+        Err(err) if contain::<ExitError>(err.chain()) => Err(err),
         Err(err) => {
             print!("{}\n", err);
             Ok(())

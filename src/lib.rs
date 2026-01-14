@@ -10,7 +10,10 @@ pub mod shell;
 pub static BUILTIN_COMMANDS: &[&str] = &["exit", "echo", "type", "pwd", "cd", "history"];
 
 #[derive(thiserror::Error, Debug)]
-pub enum CallError {
-    #[error("exit")]
-    Exit,
+pub struct ExitError {}
+
+impl std::fmt::Display for ExitError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_fmt(format_args!("ExitError"))
+    }
 }

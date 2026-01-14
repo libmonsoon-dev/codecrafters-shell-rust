@@ -1,7 +1,7 @@
 use crate::bin_path::BinPath;
 use crate::editor::Editor;
 use crate::parser::{Command, OutputStream};
-use crate::{print_to, CallError, BUILTIN_COMMANDS};
+use crate::{print_to, ExitError, BUILTIN_COMMANDS};
 use anyhow::{bail, Context};
 use rustyline::history::History;
 use std::cell::RefCell;
@@ -144,7 +144,7 @@ impl<'a> BuiltinProcess<'a> {
         };
 
         p.result = match p.args[0].as_ref() {
-            "exit" => Err(CallError::Exit.into()),
+            "exit" => Err(ExitError::Exit.into()),
             "echo" => p.echo_builtin(),
             "type" => p.type_builtin(),
             "pwd" => Ok(print_to!(

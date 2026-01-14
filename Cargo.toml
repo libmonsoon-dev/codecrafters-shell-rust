@@ -7,6 +7,7 @@ rust-version = "1.91"
 
 [dependencies]
 rustyline = { git = "https://github.com/libmonsoon-dev/rustyline", branch = "codecrafters-fix" }
+#rustyline = { path = "../../upstream/rustyline" }
 anyhow = "1.0"
 indexmap = "2.0"
 

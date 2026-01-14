@@ -2,7 +2,7 @@ use crate::bin_path::BinPath;
 use crate::editor::Editor;
 use crate::parser::{Command, Parser};
 use crate::pipeline::Pipeline;
-use crate::print;
+use crate::{print, CallError};
 use std::cell::RefCell;
 use std::env;
 use std::env::VarError;
@@ -79,12 +79,14 @@ impl Shell {
     }
 
     fn append_history(&mut self) -> anyhow::Result<()> {
+        let history_file = env::var("HISTFILE");
+        match history_file {
+            Err(VarError::NotPresent) => return Ok(()),
+            _ => {}
+        }
+
         let command = Command {
-            args: vec![
-                String::from("history"),
-                String::from("-a"),
-                env::var("HISTFILE")?,
-            ],
+            args: vec![String::from("history"), String::from("-a"), history_file?],
             redirects: vec![],
         };
         self.new_pipeline(&command).run()?;
@@ -93,10 +95,17 @@ impl Shell {
     }
 }
 
+impl Drop for Shell {
+    fn drop(&mut self) {
+        self.append_history().unwrap();
+    }
+}
+
 fn handle_err<T>(result: anyhow::Result<T>) -> anyhow::Result<()> {
     match result {
         Ok(_) => Ok(()),
         Err(err) if contain::<rustyline::error::ReadlineError>(err.chain()) => Err(err),
+        Err(err) if contain::<CallError>(err.chain()) => Err(err),
         Err(err) => {
             print!("{}\n", err);
             Ok(())

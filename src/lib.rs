@@ -8,3 +8,9 @@ pub mod pipeline;
 pub mod shell;
 
 pub static BUILTIN_COMMANDS: &[&str] = &["exit", "echo", "type", "pwd", "cd", "history"];
+
+#[derive(thiserror::Error, Debug)]
+pub enum CallError {
+    #[error("exit")]
+    Exit,
+}

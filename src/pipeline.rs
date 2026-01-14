@@ -1,7 +1,7 @@
 use crate::bin_path::BinPath;
 use crate::editor::Editor;
 use crate::parser::{Command, OutputStream};
-use crate::{print_to, BUILTIN_COMMANDS};
+use crate::{print_to, CallError, BUILTIN_COMMANDS};
 use anyhow::{bail, Context};
 use rustyline::history::History;
 use std::cell::RefCell;
@@ -41,7 +41,7 @@ impl<'a> Pipeline<'a> {
             };
 
             let next_process = self.call(&pipe.args, Some(process.stdout()))?;
-            process.wait(&mut self.threads);
+            process.wait(&mut self.threads)?;
 
             command = pipe;
             process = next_process;
@@ -49,7 +49,7 @@ impl<'a> Pipeline<'a> {
 
         self.copy_stdout(process.stdout(), command.get_output()?);
         self.copy_stderr(process.stderr(), command.get_error_output()?);
-        process.wait(&mut self.threads);
+        process.wait(&mut self.threads)?;
 
         for thread in self.threads.drain(..) {
             thread.join().unwrap();
@@ -108,7 +108,7 @@ trait Process {
 
     fn stderr(&mut self) -> ProcessStderr;
 
-    fn wait(&mut self, threads: &mut Vec<thread::JoinHandle<()>>);
+    fn wait(&mut self, threads: &mut Vec<thread::JoinHandle<()>>) -> anyhow::Result<()>;
 }
 
 enum ProcessStdout {
@@ -126,6 +126,7 @@ struct BuiltinProcess<'a> {
     bin_path: Rc<RefCell<BinPath>>,
     editor: Rc<RefCell<Editor>>,
     output: Vec<u8>,
+    result: anyhow::Result<()>,
 }
 
 impl<'a> BuiltinProcess<'a> {
@@ -139,25 +140,30 @@ impl<'a> BuiltinProcess<'a> {
             bin_path,
             editor,
             output: Vec::new(),
+            result: Ok(()),
         };
 
-        match p.args[0].as_ref() {
-            "exit" => process::exit(0),
-            "echo" => p.echo_builtin().unwrap(),
-            "type" => p.type_builtin().unwrap(),
-            "pwd" => print_to!(p.output, "{}\n", env::current_dir().unwrap().display()),
-            "cd" => p.cd_builtin().unwrap(),
-            "history" => p.history_builtin().unwrap(),
+        p.result = match p.args[0].as_ref() {
+            "exit" => Err(CallError::Exit.into()),
+            "echo" => p.echo_builtin(),
+            "type" => p.type_builtin(),
+            "pwd" => Ok(print_to!(
+                p.output,
+                "{}\n",
+                env::current_dir().unwrap().display()
+            )),
+            "cd" => p.cd_builtin(),
+            "history" => p.history_builtin(),
             _ => unimplemented!("builtin command {}", p.args[0]),
-        }
+        };
 
         p
     }
 
-    fn type_builtin(&mut self) -> io::Result<()> {
+    fn type_builtin(&mut self) -> anyhow::Result<()> {
         let _ = self.args.clone()[1..]
             .iter()
-            .try_for_each(|arg| -> io::Result<()> {
+            .try_for_each(|arg| -> anyhow::Result<()> {
                 if BUILTIN_COMMANDS.contains(&arg.as_str()) {
                     print_to!(self.output, "{} is a shell builtin\n", arg);
                     return Ok(());
@@ -176,7 +182,7 @@ impl<'a> BuiltinProcess<'a> {
         Ok(())
     }
 
-    fn cd_builtin(&mut self) -> io::Result<()> {
+    fn cd_builtin(&mut self) -> anyhow::Result<()> {
         let path = if self.args.len() == 1 || self.args[1] == "~" {
             env::var("HOME").unwrap()
         } else {
@@ -193,7 +199,7 @@ impl<'a> BuiltinProcess<'a> {
         Ok(())
     }
 
-    fn echo_builtin(&mut self) -> io::Result<()> {
+    fn echo_builtin(&mut self) -> anyhow::Result<()> {
         let str = self.args[1..].join(" ");
         print_to!(self.output, "{str}\n");
 
@@ -248,8 +254,8 @@ impl<'a> Process for BuiltinProcess<'a> {
         ProcessStderr::Buffer(Vec::new())
     }
 
-    fn wait(&mut self, _threads: &mut Vec<thread::JoinHandle<()>>) {
-        // Noop
+    fn wait(&mut self, _threads: &mut Vec<thread::JoinHandle<()>>) -> anyhow::Result<()> {
+        mem::replace(&mut self.result, Ok(()))
     }
 }
 
@@ -314,7 +320,7 @@ impl Process for ExternalProcess {
         )
     }
 
-    fn wait(&mut self, threads: &mut Vec<thread::JoinHandle<()>>) {
+    fn wait(&mut self, threads: &mut Vec<thread::JoinHandle<()>>) -> anyhow::Result<()> {
         let mut child = mem::take(&mut self.child).unwrap();
 
         match self.stdin_buf {
@@ -332,5 +338,6 @@ impl Process for ExternalProcess {
         });
 
         threads.push(process);
+        Ok(())
     }
 }

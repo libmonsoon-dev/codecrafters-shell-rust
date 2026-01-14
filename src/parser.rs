@@ -57,7 +57,7 @@ impl Command {
 }
 
 impl Parser {
-    pub fn new(input: String) -> Self {
+    pub fn new(input: &str) -> Self {
         Self {
             input: Lexer::new(input).lex(),
             argument_buffer: String::new(),
@@ -393,7 +393,7 @@ mod tests {
         ))
     ]))]
     fn parser_test(#[case] input: &str, #[case] expected: Command) {
-        let mut parser = Parser::new(String::from(input));
+        let mut parser = Parser::new(input);
         let command = parser.parse();
         assert_eq!(command, expected);
     }

@@ -4,7 +4,7 @@ pub struct Lexer {
 }
 
 impl Lexer {
-    pub fn new(input: String) -> Self {
+    pub fn new(input: &str) -> Self {
         Self {
             input: input.chars().collect(),
             position: 0,
@@ -183,7 +183,7 @@ mod tests {
         }
     ])]
     fn lexer_test(#[case] input: &str, #[case] expected_tokens: Vec<Token>) {
-        let mut lexer = Lexer::new(String::from(input));
+        let mut lexer = Lexer::new(input);
         let tokens = lexer.lex();
         assert_eq!(tokens, expected_tokens,);
     }

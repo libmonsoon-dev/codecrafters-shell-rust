@@ -36,9 +36,7 @@ impl Shell {
     fn read(&mut self) -> anyhow::Result<()> {
         self.input_buffer = self.editor.borrow_mut().readline("$ ")?;
 
-        //TODO: pass this vectors to parser to avoid allocations
-        self.command = Parser::new(self.input_buffer.clone()).parse();
-
+        self.command = Parser::new(&self.input_buffer).parse();
         Ok(())
     }
 
